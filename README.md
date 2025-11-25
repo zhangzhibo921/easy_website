@@ -52,7 +52,7 @@ git clone https://github.com/zhangzhibo921/STARTPRO_easy_website.git
 
 2) 下载zip包后，传到服务器解压
    
-   ![](E:\00ZZB_Code\官网内容管理系统\下载zip包代码.png)
+   ![](下载zip包代码.png)
 
 ```bash
 # 解压下载好的压缩包
@@ -63,7 +63,7 @@ unzip STARTPRO_easy_website-main.zip
 
 ##### 进入项目根目录
 
-![](E:\00ZZB_Code\官网内容管理系统\文件目录说明.png)
+![](文件目录说明.png)
 
 1) 安装依赖  
    
@@ -80,7 +80,7 @@ unzip STARTPRO_easy_website-main.zip
 
 2) 修改数据库配置(替换数据库账户和密码)
    
-   ![](E:\00ZZB_Code\官网内容管理系统\数据库信息修改.png)
+   ![](数据库信息修改.png)
    
    ```bash
    # 回到项目根目录，并编写配置文件
@@ -141,26 +141,26 @@ unzip STARTPRO_easy_website-main.zip
 
 1) 后台点击“新建页面”或编辑现有页面。
    
-   ![](E:\00ZZB_Code\官网内容管理系统\页面管理1.png)  
+   ![](页面管理1.png)  
 2) 在 Page Builder 中拖入组件，左侧改文字/图片/按钮链接，右侧实时预览。  
    
-   ![](E:\00ZZB_Code\官网内容管理系统\页面管理2.png)
+   ![](页面管理2.png)
 3) 需要时间轴/赛博展示等特殊模块，直接选对应模板即可。  
    
-   ![](E:\00ZZB_Code\官网内容管理系统\页面管理3.png)
+   ![](页面管理3.png)
    
-   ![](E:\00ZZB_Code\官网内容管理系统\页面管理4.png)
+   ![](页面管理4.png)
 4) 切换主题/色彩检查视觉，保存后发布，前台立即生效。
    
-   ![](E:\00ZZB_Code\官网内容管理系统\主题设置1.png)
+   ![](主题设置1.png)
    
-   ![](E:\00ZZB_Code\官网内容管理系统\主题设置2.png)
+   ![](主题设置2.png)
 
 ## 媒体与上传
 
 - 上传入口：后台媒体区或组件编辑时选择图片。  
   
-  ![](E:\00ZZB_Code\官网内容管理系统\素材管理1.png)
+  ![](素材管理1.png)
 - 体积限制：默认前台 10 MB、后台 100 MB，可在 `.env` 用 `MAX_UPLOAD_SIZE` 调整。  
 - 存储位置：`/uploads`，部署时请让 Nginx/静态资源路径可访问。
 
@@ -170,11 +170,11 @@ unzip STARTPRO_easy_website-main.zip
 - 邮件通知：后台“通知设置”填写 SMTP，可用“发送测试”验证。  
 - 消息中心：查看提交、标记已读、重发通知，便于跟进线索。
   
-  ![](E:\00ZZB_Code\官网内容管理系统\通知设置1.png)
+  ![](通知设置1.png)
   
-  ![](E:\00ZZB_Code\官网内容管理系统\通知设置2.png)
+  ![](通知设置2.png)
   
-  ![](E:\00ZZB_Code\官网内容管理系统\通知设置3.png)
+  ![](通知设置3.png)
 
 ## 部署要点
 
@@ -198,3 +198,4 @@ unzip STARTPRO_easy_website-main.zip
 企业官网： https://www.startpro.com.cn
 
 ![](E:\00ZZB_Code\官网内容管理系统\公众号二维码-小.jpg)
+
