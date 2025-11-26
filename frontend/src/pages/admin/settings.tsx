@@ -1,12 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react'
-import AdminLayout from '@/components/AdminLayout'
-import ThemeAwareFooter from '@/components/ThemeAwareFooter'
-import UserProfileModal from '@/components/UserProfileModal'
-import ChangePasswordModal from '@/components/ChangePasswordModal'
-import AssetPickerModal, { SelectedAsset } from '@/components/AssetPickerModal'
-import { ThemeAwareInput, ThemeAwareSelect, ThemeAwareTextarea } from '@/components/ThemeAwareFormControls'
-import BackgroundRenderer from '@/components/theme-backgrounds/BackgroundRenderer'
+﻿import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
+import { useForm, useFieldArray } from 'react-hook-form'
 import {
   Save,
   Globe,
@@ -18,14 +12,20 @@ import {
   Image as ImageIcon,
   Building,
   Menu,
-  Link,
+  Link as LinkIcon,
   Plus,
   Trash2,
   User,
   Key,
   ChevronDown
 } from 'lucide-react'
-import { useForm, useFieldArray } from 'react-hook-form'
+import AdminLayout from '@/components/AdminLayout'
+import ThemeAwareFooter from '@/components/ThemeAwareFooter'
+import UserProfileModal from '@/components/UserProfileModal'
+import ChangePasswordModal from '@/components/ChangePasswordModal'
+import AssetPickerModal, { SelectedAsset } from '@/components/AssetPickerModal'
+import { ThemeAwareInput, ThemeAwareSelect, ThemeAwareTextarea } from '@/components/ThemeAwareFormControls'
+import BackgroundRenderer from '@/components/theme-backgrounds/BackgroundRenderer'
 import toast from 'react-hot-toast'
 import { settingsApi, authApi } from '@/utils/api'
 import { useSettings } from '@/contexts/SettingsContext'
@@ -33,11 +33,7 @@ import type { Settings, FooterSection, FooterLayout, FooterSocialLink } from '@/
 import { getThemeById, resolveBackgroundEffect, type ThemeBackgroundChoice } from '@/styles/themes'
 
 const EMPTY_FOOTER_LAYOUT: FooterLayout = {
-  brand: {
-    name: '',
-    description: '',
-    logo: ''
-  },
+  brand: { name: '', description: '', logo: '' },
   sections: []
 }
 
@@ -48,18 +44,20 @@ const backgroundOptions = [
   { value: 'pattern', label: '几何纹理' }
 ]
 
+const sanitizeColorValue = (value?: string | null) => (typeof value === 'string' ? value.trim() : '')
+
 const normalizeFooterLayoutPayload = (layout?: FooterLayout | null): FooterLayout => {
   const sourceLayout = layout ?? EMPTY_FOOTER_LAYOUT
-  const brand = (sourceLayout?.brand as FooterLayout['brand']) || EMPTY_FOOTER_LAYOUT.brand
+  const brand = sourceLayout.brand || EMPTY_FOOTER_LAYOUT.brand
   const timestamp = Date.now()
 
   const normalizedBrand = {
-    name: (brand.name && brand.name.trim()) || '',
+    name: (brand.name || '').trim(),
     description: brand.description || '',
     logo: brand.logo || ''
   }
 
-  const sectionsSource = Array.isArray(sourceLayout?.sections) ? sourceLayout.sections : []
+  const sectionsSource = Array.isArray(sourceLayout.sections) ? sourceLayout.sections : []
   const sections = sectionsSource
     .map((section, index) => {
       const linksSource = Array.isArray(section?.links) ? section.links : []
@@ -71,7 +69,6 @@ const normalizeFooterLayoutPayload = (layout?: FooterLayout | null): FooterLayou
           url: (link.url && link.url.trim()) || '#',
           target: link.target || '_self'
         }))
-
       return {
         id: section.id || `section_${index}_${timestamp}`,
         title: (section.title && section.title.trim()) || `栏目${index + 1}`,
@@ -81,21 +78,13 @@ const normalizeFooterLayoutPayload = (layout?: FooterLayout | null): FooterLayou
     })
     .filter(section => section.title || section.links.length)
 
-  return {
-    brand: normalizedBrand,
-    sections
-  }
-}
-
-const sanitizeColorValue = (value?: string | null) => {
-  if (typeof value !== 'string') return ''
-  return value.trim()
+  return { brand: normalizedBrand, sections }
 }
 
 const sanitizeFooterSocialLinksPayload = (links?: FooterSocialLink[] | null): FooterSocialLink[] => {
   const timestamp = Date.now()
   const source = Array.isArray(links) ? links : []
-  const sanitized: FooterSocialLink[] = source
+  return source
     .filter(link => link && ((link.label && link.label.trim()) || (link.url && link.url.trim())))
     .map((link, index) => ({
       id: link.id || `social_${index}_${timestamp}`,
@@ -103,13 +92,14 @@ const sanitizeFooterSocialLinksPayload = (links?: FooterSocialLink[] | null): Fo
       url: (link.url && link.url.trim()) || '#',
       icon: link.icon || '',
       target: link.target === '_self' ? '_self' : '_blank',
-      color: sanitizeColorValue(link.color)
+      color: sanitizeColorValue(link.color),
+      show_hover_image: link.show_hover_image === true,
+      hover_image: link.hover_image || ''
     }))
-  return sanitized
 }
 
 const sanitizeSettingsPayload = (data: Settings): Settings => {
-  const payload = { ...data } as Record<string, any>
+  const payload = { ...data } as any
   payload.footer_layout = normalizeFooterLayoutPayload(data.footer_layout)
   payload.footer_social_links = sanitizeFooterSocialLinksPayload(data.footer_social_links)
   payload.site_statement = (data.site_statement || '').trim()
@@ -124,6 +114,7 @@ type AssetPickerTarget =
   | { type: 'siteLogo' }
   | { type: 'siteFavicon' }
   | { type: 'socialLinkIcon'; index: number }
+  | { type: 'socialLinkHoverImage'; index: number }
 
 export default function AdminSettingsPage() {
   const [isLoading, setIsLoading] = useState(true)
@@ -215,12 +206,22 @@ export default function AdminSettingsPage() {
       setIsLoading(true)
       const response = await settingsApi.get()
       if (response.success) {
-        const { wechat_qrcode: _ignoredWechat, ...rawServer } = response.data || {}
-        const { site_record: _removedRecord, nav_layout_style: _removedLayout, theme_overrides: _removedOverrides, ...serverSettings } =
-          (rawServer as Partial<Settings> & Record<string, any>) || {}
+        const { wechat_qrcode: _ignore, ...raw } = response.data || {}
+        const { site_record: _r1, nav_layout_style: _r2, theme_overrides: _r3, ...serverSettings } =
+          (raw as Partial<Settings> & Record<string, any>) || {}
 
-        const dataWithDefaults = {
-          site_theme: 'classic-blue',
+        const dataWithDefaults: Settings = {
+          site_name: (serverSettings as any)?.site_name || '',
+          site_description: (serverSettings as any)?.site_description || '',
+          company_name: (serverSettings as any)?.company_name || '',
+          site_logo: (serverSettings as any)?.site_logo || '',
+          site_favicon: (serverSettings as any)?.site_favicon || '',
+          contact_email: (serverSettings as any)?.contact_email || '',
+          contact_phone: (serverSettings as any)?.contact_phone || '',
+          address: (serverSettings as any)?.address || '',
+          icp_number: (serverSettings as any)?.icp_number || '',
+          social_links: (serverSettings as any)?.social_links || {},
+          site_theme: (serverSettings as any)?.site_theme || 'neo-futuristic',
           quick_links: [],
           site_statement: '',
           icp_link: '',
@@ -229,14 +230,10 @@ export default function AdminSettingsPage() {
           footer_layout: serverSettings.footer_layout ?? EMPTY_FOOTER_LAYOUT,
           footer_social_links: serverSettings.footer_social_links ?? [],
           theme_background: (serverSettings.theme_background as ThemeBackgroundChoice) || 'theme-default'
-        } as Settings
+        }
 
-        if (!dataWithDefaults.footer_layout) {
-          dataWithDefaults.footer_layout = EMPTY_FOOTER_LAYOUT
-        }
-        if (!dataWithDefaults.footer_social_links) {
-          dataWithDefaults.footer_social_links = []
-        }
+        if (!dataWithDefaults.footer_layout) dataWithDefaults.footer_layout = EMPTY_FOOTER_LAYOUT
+        if (!dataWithDefaults.footer_social_links) dataWithDefaults.footer_social_links = []
 
         setSettings(dataWithDefaults)
         reset(dataWithDefaults)
@@ -249,10 +246,6 @@ export default function AdminSettingsPage() {
     } finally {
       setIsLoading(false)
     }
-  }
-
-  const handlePasswordChanged = () => {
-    fetchUserProfile()
   }
 
   const determineAssetSource = (url?: string | null) => (url && url.includes('/system-default/')) ? 'system' : 'user'
@@ -280,6 +273,12 @@ export default function AdminSettingsPage() {
       case 'socialLinkIcon': {
         const path = `footer_social_links.${assetPickerTarget.index}.icon`
         setValue(path as any, asset.url, { shouldDirty: true })
+        break
+      }
+      case 'socialLinkHoverImage': {
+        const path = `footer_social_links.${assetPickerTarget.index}.hover_image`
+        setValue(path as any, asset.url, { shouldDirty: true })
+        setValue(`footer_social_links.${assetPickerTarget.index}.show_hover_image` as const, true, { shouldDirty: true })
         break
       }
       default:
@@ -386,12 +385,8 @@ export default function AdminSettingsPage() {
   return (
     <AdminLayout title="系统设置" description="管理站点主题、品牌、页脚与社交信息">
       <div className="space-y-6">
-        {/* 系统概览 */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="bg-theme-surfaceAlt p-6 rounded-xl border border-semantic-panelBorder shadow-md"
-        >
+        {/* 概览 */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="bg-theme-surfaceAlt p-6 rounded-xl border border-semantic-panelBorder shadow-md">
           <div className="flex items-center space-x-3">
             <SettingsIcon className="w-6 h-6 text-theme-accent" />
             <div>
@@ -403,14 +398,9 @@ export default function AdminSettingsPage() {
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
           {/* 网站声明与备案 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder">
             <div className="flex items-center space-x-3 mb-6">
-              <Link className="w-6 h-6 text-theme-accent" />
+              <LinkIcon className="w-6 h-6 text-theme-accent" />
               <div>
                 <h2 className="text-xl font-bold text-theme-text">网站声明与备案</h2>
                 <p className="text-sm text-theme-textSecondary">配置页脚展示的公司简介、站点声明与备案链接</p>
@@ -419,56 +409,31 @@ export default function AdminSettingsPage() {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-theme-text mb-1">网站声明 / 公司简介</label>
-                <ThemeAwareTextarea
-                  rows={3}
-                  {...register('site_statement' as const)}
-                  placeholder="用于页脚展示的公司简介或站点声明"
-                />
+                <ThemeAwareTextarea rows={3} {...register('site_statement' as const)} placeholder="用于页脚展示的公司简介或站点声明" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text mb-1">ICP备案号</label>
-                <ThemeAwareInput
-                  type="text"
-                  {...register('icp_number' as const)}
-                  placeholder="例如 粤ICP备xxxxxxx号"
-                />
+                <ThemeAwareInput type="text" {...register('icp_number' as const)} placeholder="例如 粤ICP备xxxxxxx号" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text mb-1">ICP备案链接</label>
-                <ThemeAwareInput
-                  type="url"
-                  {...register('icp_link' as const)}
-                  placeholder="请输入工信部备案查询链接"
-                />
+                <ThemeAwareInput type="url" {...register('icp_link' as const)} placeholder="请输入工信部备案查询链接" />
               </div>
             </div>
           </motion.div>
 
           {/* 账户安全 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.15 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder">
             <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
               <div>
                 <h2 className="text-xl font-bold text-theme-text">账户安全</h2>
                 <p className="text-sm text-theme-textSecondary">查看当前登录账号，支持更新资料与修改密码</p>
               </div>
               <div className="flex flex-wrap gap-3">
-                <button
-                  type="button"
-                  onClick={() => setShowProfileModal(true)}
-                  className="px-4 py-2 rounded-lg border border-semantic-panelBorder text-theme-textSecondary hover:text-theme-text transition-colors"
-                >
+                <button type="button" onClick={() => setShowProfileModal(true)} className="px-4 py-2 rounded-lg border border-semantic-panelBorder text-theme-textSecondary hover:text-theme-text transition-colors">
                   查看个人资料
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPasswordModal(true)}
-                  className="px-4 py-2 rounded-lg bg-semantic-cta-primary text-white shadow-semantic hover:opacity-90 transition-opacity"
-                >
+                <button type="button" onClick={() => setShowPasswordModal(true)} className="px-4 py-2 rounded-lg bg-semantic-cta-primary text-white shadow-semantic hover:opacity-90 transition-opacity">
                   修改密码
                 </button>
               </div>
@@ -476,12 +441,7 @@ export default function AdminSettingsPage() {
           </motion.div>
 
           {/* 主题与预览 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder">
             <div className="flex items-center space-x-3 mb-6">
               <SettingsIcon className="w-6 h-6 text-semantic-hero-accent" />
               <div>
@@ -498,289 +458,80 @@ export default function AdminSettingsPage() {
                   <option value="elegant-dark">优雅暗色</option>
                   <option value="minimal-pro">极简专业</option>
                   <option value="neo-futuristic">未来主义</option>
-                  <option value="corporate-blue">商务蓝</option>                 
+                  <option value="corporate-blue">商务蓝</option>
                   <option value="emerald-forest">翠绿森林</option>
                   <option value="royal-amber">琥珀金</option>
                   <option value="mystic-purple">秘境紫</option>
-                  
+                  <option value="classic-blue">经典蓝</option>
                 </ThemeAwareSelect>
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text mb-1">背景特效</label>
-                <ThemeAwareSelect {...register('theme_background')}>
+                <ThemeAwareSelect {...register('theme_background' as const)}>
                   {backgroundOptions.map(option => (
                     <option key={option.value} value={option.value}>
                       {option.label}
                     </option>
                   ))}
                 </ThemeAwareSelect>
-                <p className="text-xs text-theme-textSecondary mt-2">
-                  不同主题背景会影响预览中的特效表现，请按需选择
-                </p>
               </div>
             </div>
-
-            <div className="mt-6 space-y-3">
-              <div className="flex items-center justify-between">
-                <p className="text-sm font-semibold text-theme-text">主题实时预览</p>
-                <span className="text-xs text-theme-textSecondary">当前主题：{previewTheme.name}</span>
-              </div>
-              <div className="grid gap-4 md:grid-cols-2">
-                <div
-                  className="relative rounded-2xl border shadow-sm p-4 overflow-hidden"
-                  style={{ borderColor: previewTheme.semantic.panelBorder }}
-                >
-                  <BackgroundRenderer effect={previewBackgroundEffect} />
-                  <div className="relative z-10 space-y-4" style={{ color: previewTheme.colors.text.primary }}>
-                    <div>
-                      <p className="text-xs uppercase tracking-wide text-theme-textSecondary">焦点推荐</p>
-                      <h4 className="text-lg font-semibold mt-1">未来科技峰会</h4>
-                    </div>
-                    <p className="text-sm" style={{ color: previewTheme.colors.text.secondary }}>
-                      展示品牌实力与核心服务亮点
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <span
-                        className="px-3 py-1 rounded-full text-xs font-semibold"
-                        style={{
-                          background: previewTheme.semantic.tagBg,
-                          color: previewTheme.semantic.tagText
-                        }}
-                      >
-                        Tag
-                      </span>
-                      <button
-                        type="button"
-                        className="px-4 py-2 rounded-lg text-sm font-medium shadow-sm"
-                        style={{
-                          background: previewTheme.semantic.ctaPrimaryBg,
-                          color: previewTheme.semantic.ctaPrimaryText
-                        }}
-                      >
-                        立即了解
-                      </button>
-                    </div>
-                  </div>
-                </div>
-                <div
-                  className="relative rounded-2xl border shadow-inner p-4 space-y-4 overflow-hidden"
-                  style={{ borderColor: previewTheme.semantic.panelBorder }}
-                >
-                  <BackgroundRenderer effect={previewBackgroundEffect} />
-                  <div className="relative z-10 space-y-4">
-                    <div>
-                      <p className="text-xs uppercase tracking-wide opacity-80">品牌信息</p>
-                      <h4 className="text-lg font-semibold">默认页脚布局</h4>
-                      <p className="text-sm opacity-80">
-                        可配置品牌名称、栏目与社交媒体信息，实时查看展示效果
-                      </p>
-                    </div>
-                    <div className="space-y-3">
-                      <div>
-                        <label className="text-xs font-medium text-theme-textSecondary block mb-1">品牌名称</label>
-                        <input
-                          readOnly
-                          value={watchedBrandName || '未命名品牌'}
-                          style={previewFieldBaseStyle}
-                          className="w-full bg-transparent border-none focus:outline-none"
-                        />
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-theme-textSecondary block mb-1">栏目选择</label>
-                        <div style={previewSelectStyle}>
-                          <span className="text-sm opacity-90">解决方案 · 服务</span>
-                          <ChevronDown className="w-4 h-4 text-theme-textSecondary" />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="text-xs font-medium text-theme-textSecondary block mb-1">联系方式</label>
-                        <div className="text-sm opacity-80" style={{ color: previewTheme.colors.text.secondary }}>
-                          info@example.com
-                        </div>
-                      </div>
-                    </div>
-                  </div>
+            <div className="relative rounded-xl overflow-hidden border border-semantic-panelBorder bg-black/5">
+              <BackgroundRenderer effect={previewBackgroundEffect} />
+              <div className="absolute inset-0 flex items-center justify-center">
+                <div className="bg-black/30 text-white px-6 py-3 rounded-lg backdrop-blur-sm">
+                  主题预览区
                 </div>
               </div>
             </div>
           </motion.div>
 
-                    {/* 站点基础信息 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.22 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
-            <div className="flex items-center space-x-3 mb-6">
-              <Globe className="w-6 h-6 text-theme-accent" />
+          {/* 品牌与页脚栏目 */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder space-y-6">
+            <div className="flex items-center space-x-3">
+              <Building className="w-6 h-6 text-theme-accent" />
               <div>
-                <h2 className="text-xl font-bold text-theme-text">站点基础信息</h2>
-                <p className="text-sm text-theme-textSecondary">用于官网与后台展示的全局信息</p>
+                <h2 className="text-xl font-bold text-theme-text">品牌与页脚栏目</h2>
+                <p className="text-sm text-theme-textSecondary">可配置品牌名称、栏目与社交媒体信息，实时查看展示效果</p>
               </div>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">网站名称</label>
-                <ThemeAwareInput type="text" {...register('site_name')} placeholder="输入网站名称" />
+                <label className="block text-sm font-medium text-theme-text mb-1">品牌名称</label>
+                <ThemeAwareInput type="text" {...register('footer_layout.brand.name' as const)} className="px-3" />
               </div>
               <div>
                 <label className="block text-sm font-medium text-theme-text mb-1">公司名称</label>
-                <ThemeAwareInput type="text" {...register('company_name')} placeholder="输入公司名称" />
-              </div>
-            </div>
-            <div className="mt-4 space-y-4">
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">网站描述（全局 SEO）</label>
-                <ThemeAwareTextarea
-                  rows={2}
-                  {...register('site_description')}
-                  placeholder="如：现代化科技公司官网，提供专业技术服务……"
-                />
-                <p className="text-xs text-theme-textSecondary mt-1">作为全局 SEO 描述，页面未填写时使用此内容。</p>
+                <ThemeAwareInput type="text" {...register('company_name' as const)} className="px-3" placeholder="公司全称" />
               </div>
               <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">网站关键词（全局 SEO）</label>
-                <ThemeAwareInput
-                  type="text"
-                  {...register('site_keywords')}
-                  placeholder="如：科技公司,技术服务,行业关键词"
-                />
-                <p className="text-xs text-theme-textSecondary mt-1">逗号分隔，作为全局默认关键词，页面未填时使用。</p>
-              </div>
-            </div>
-          </motion.div>
-
-
-          {/* Logo & Favicon */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.24 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
-            <div className="flex items-center space-x-3 mb-6">
-              <ImageIcon className="w-6 h-6 text-theme-accent" />
-              <div>
-                <h2 className="text-xl font-bold text-theme-text">LOGO 与 Favicon</h2>
-                <p className="text-sm text-theme-textSecondary">上传或替换站点 Logo 与 Favicon</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-              {/* Site Logo */}
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-theme-text">站点 Logo</label>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                  <ThemeAwareInput type="text" {...register('site_logo')} className="flex-1" placeholder="/logo.svg" />
-                  <button
-                    type="button"
-                    onClick={() => openAssetPicker({ type: 'siteLogo' }, watchedLogo)}
-                    className="inline-flex items-center px-4 py-2 rounded-lg border border-semantic-panelBorder bg-semantic-mutedBg text-theme-textSecondary hover:text-theme-text transition-colors"
-                  >
+                <label className="block text-sm font-medium text-theme-text mb-1">品牌 Logo</label>
+                <div className="flex gap-2 items-center">
+                  <ThemeAwareInput type="text" readOnly {...register('site_logo' as const)} className="flex-1 cursor-not-allowed bg-theme-surfaceAlt text-theme-textSecondary" placeholder="请选择或上传品牌 Logo" />
+                  <button type="button" onClick={() => openAssetPicker({ type: 'siteLogo' }, watchedLogo)} className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm">
                     <ImageIcon className="w-4 h-4 mr-2" />
                     选择素材
                   </button>
                 </div>
-                {watchedLogo && (
-                  <div className="mt-2">
-                    <img src={watchedLogo} alt="Logo 预览" className="h-12 object-contain rounded-lg border border-theme-divider" />
-                  </div>
-                )}
               </div>
-
-              {/* Favicon */}
-              <div className="space-y-3">
-                <label className="block text-sm font-medium text-theme-text">Favicon 图标</label>
-                <div className="flex flex-col gap-3 md:flex-row md:items-center">
-                  <ThemeAwareInput type="text" {...register('site_favicon')} className="flex-1" placeholder="/favicon.ico" />
-                  <button
-                    type="button"
-                    onClick={() => openAssetPicker({ type: 'siteFavicon' }, watchedFavicon)}
-                    className="inline-flex items-center px-4 py-2 rounded-lg border border-semantic-panelBorder bg-semantic-mutedBg text-theme-textSecondary hover:text-theme-text transition-colors"
-                  >
+              <div>
+                <label className="block text-sm font-medium text-theme-text mb-1">网站 Favicon</label>
+                <div className="flex gap-2 items-center">
+                  <ThemeAwareInput type="text" readOnly {...register('site_favicon' as const)} className="flex-1 cursor-not-allowed bg-theme-surfaceAlt text-theme-textSecondary" placeholder="请选择或上传 Favicon" />
+                  <button type="button" onClick={() => openAssetPicker({ type: 'siteFavicon' }, watchedFavicon)} className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm">
                     <ImageIcon className="w-4 h-4 mr-2" />
                     选择素材
                   </button>
                 </div>
-                {watchedFavicon && (
-                  <div className="mt-2">
-                    <img
-                      src={watchedFavicon}
-                      alt="Favicon 预览"
-                      className="h-12 w-12 object-contain rounded-lg border border-theme-divider"
-                    />
-                  </div>
-                )}
-              </div>
-            </div>
-          </motion.div>
-
-          {/* 联系方式 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.26 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder"
-          >
-            <div className="flex items-center space-x-3 mb-6">
-              <Building className="w-6 h-6 text-theme-accent" />
-              <div>
-                <h2 className="text-xl font-bold text-theme-text">联系方式</h2>
-                <p className="text-sm text-theme-textSecondary">展示在页脚的邮箱、电话与地址信息</p>
-              </div>
-            </div>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">邮箱地址</label>
-                <ThemeAwareInput type="email" {...register('contact_email')} placeholder="contact@example.com" />
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">联系电话</label>
-                <ThemeAwareInput type="tel" {...register('contact_phone')} placeholder="400-123-4567" />
-              </div>
-              <div className="md:col-span-3">
-                <label className="block text-sm font-medium text-theme-text mb-1">联系地址</label>
-                <ThemeAwareInput type="text" {...register('address')} placeholder="请输入公司地址" />
-              </div>
-            </div>
-          </motion.div>
-
-          {/* 页脚品牌与栏目 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.28 }}
-            className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder space-y-6"
-          >
-            <div className="flex items-center space-x-3">
-              <Link className="w-6 h-6 text-theme-accent" />
-              <div>
-                <h2 className="text-xl font-bold text-theme-text">页脚栏目与品牌配置</h2>
-                <p className="text-sm text-theme-textSecondary">管理品牌简介、栏目及链接，控制页脚显示内容</p>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-              <div>
-                <label className="block text-sm font-medium text-theme-text mb-1">品牌名称</label>
-                <ThemeAwareInput
-                  type="text"
-                  {...register('footer_layout.brand.name' as const)}
-                  className="px-3"
-                  placeholder="请输入品牌名称"
-                />
               </div>
               <div className="md:col-span-2">
                 <label className="block text-sm font-medium text-theme-text mb-1">品牌描述</label>
-                <ThemeAwareInput
-                  type="text"
-                  {...register('footer_layout.brand.description' as const)}
-                  className="px-3"
-                  placeholder="一句话描述品牌定位"
-                />
+                <ThemeAwareInput type="text" {...register('footer_layout.brand.description' as const)} className="px-3" placeholder="一句话描述品牌定位" />
               </div>
             </div>
 
+            {/* 栏目管理 */}
             <div className="pt-4 border-t border-semantic-dividerStrong">
               <h3 className="text-sm font-semibold text-theme-text mb-3">页脚栏目</h3>
               <div className="space-y-4">
@@ -790,27 +541,14 @@ export default function AdminSettingsPage() {
                       <div className="flex-1 grid grid-cols-1 md:grid-cols-2 gap-4">
                         <div>
                           <label className="block text-sm font-medium text-theme-text mb-1">栏目标题</label>
-                          <ThemeAwareInput
-                            type="text"
-                            {...register(`footer_layout.sections.${sectionIndex}.title` as const)}
-                            className="px-3"
-                          />
+                          <ThemeAwareInput type="text" {...register(`footer_layout.sections.${sectionIndex}.title` as const)} className="px-3" />
                         </div>
                         <div>
                           <label className="block text-sm font-medium text-theme-text mb-1">栏目描述</label>
-                          <ThemeAwareInput
-                            type="text"
-                            {...register(`footer_layout.sections.${sectionIndex}.description` as const)}
-                            className="px-3"
-                            placeholder="用于说明该栏目展示内容"
-                          />
+                          <ThemeAwareInput type="text" {...register(`footer_layout.sections.${sectionIndex}.description` as const)} className="px-3" placeholder="用于说明该栏目展示内容" />
                         </div>
                       </div>
-                      <button
-                        type="button"
-                        onClick={() => removeFooterSection(sectionIndex)}
-                        className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-4"
-                      >
+                      <button type="button" onClick={() => removeFooterSection(sectionIndex)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors ml-4">
                         <Trash2 className="w-5 h-5" />
                       </button>
                     </div>
@@ -820,7 +558,6 @@ export default function AdminSettingsPage() {
                         const labelField = `footer_layout.sections.${sectionIndex}.links.${linkIndex}.label` as const
                         const urlField = `footer_layout.sections.${sectionIndex}.links.${linkIndex}.url` as const
                         const targetField = `footer_layout.sections.${sectionIndex}.links.${linkIndex}.target` as const
-
                         return (
                           <div key={link.id || linkIndex} className="grid grid-cols-1 md:grid-cols-4 gap-3">
                             <div>
@@ -829,12 +566,7 @@ export default function AdminSettingsPage() {
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-theme-text mb-1">链接地址</label>
-                              <ThemeAwareInput
-                                type="text"
-                                {...register(urlField)}
-                                className="px-3"
-                                placeholder="https://example.com/about"
-                              />
+                              <ThemeAwareInput type="text" {...register(urlField)} className="px-3" placeholder="https://example.com/about" />
                             </div>
                             <div>
                               <label className="block text-sm font-medium text-theme-text mb-1">打开方式</label>
@@ -844,11 +576,7 @@ export default function AdminSettingsPage() {
                               </ThemeAwareSelect>
                             </div>
                             <div className="flex items-end justify-between md:justify-end">
-                              <button
-                                type="button"
-                                onClick={() => removeFooterLink(sectionIndex, linkIndex)}
-                                className="inline-flex items-center px-3 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
-                              >
+                              <button type="button" onClick={() => removeFooterLink(sectionIndex, linkIndex)} className="inline-flex items-center px-3 py-2 text-sm text-red-500 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors">
                                 <Trash2 className="w-4 h-4 mr-2" />
                                 删除
                               </button>
@@ -856,28 +584,21 @@ export default function AdminSettingsPage() {
                           </div>
                         )
                       })}
-                      <button
-                        type="button"
-                        onClick={() => addFooterLink(sectionIndex)}
-                        className="inline-flex items-center px-3 py-2 text-sm rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors"
-                      >
+                      <button type="button" onClick={() => addFooterLink(sectionIndex)} className="inline-flex items-center px-3 py-2 text-sm rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors">
                         <Plus className="w-4 h-4 mr-2" />
                         新增链接
                       </button>
                     </div>
                   </div>
                 ))}
-                <button
-                  type="button"
-                  onClick={addFooterSection}
-                  className="inline-flex items-center px-4 py-2 bg-tech-accent text-white rounded-lg hover:bg-tech-accent/90 transition-colors"
-                >
+                <button type="button" onClick={addFooterSection} className="inline-flex items-center px-4 py-2 bg-tech-accent text-white rounded-lg hover:bg-tech-accent/90 transition-colors">
                   <Plus className="w-4 h-4 mr-2" />
                   新增栏目
                 </button>
               </div>
             </div>
 
+            {/* 社交媒体链接 */}
             <div className="pt-4 border-t border-semantic-dividerStrong">
               <h3 className="text-sm font-semibold text-theme-text mb-3">社交媒体链接</h3>
               <div className="space-y-4">
@@ -885,36 +606,18 @@ export default function AdminSettingsPage() {
                   const currentColor = (watchedFooterSocialLinks[index]?.color as string) || ''
                   const colorPreview = isValidHexColor(currentColor) ? currentColor : '#1385f0ff'
                   return (
-                    <div
-                      key={field.id}
-                      className="grid grid-cols-1 md:grid-cols-8 gap-3 border border-theme-divider rounded-lg p-3 bg-theme-surfaceAlt/60"
-                    >
+                    <div key={field.id} className="grid grid-cols-1 md:grid-cols-8 gap-3 border border-theme-divider rounded-lg p-3 bg-theme-surfaceAlt/60">
                       <div>
                         <label className="block text-sm font-medium text-theme-text mb-1">唯一 ID</label>
-                        <ThemeAwareInput
-                          type="text"
-                          {...register(`footer_social_links.${index}.id` as const)}
-                          className="px-3"
-                          placeholder="wechat / github 等"
-                        />
+                        <ThemeAwareInput type="text" {...register(`footer_social_links.${index}.id` as const)} className="px-3" placeholder="wechat / github / linkedin" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-theme-text mb-1">显示名称</label>
-                        <ThemeAwareInput
-                          type="text"
-                          {...register(`footer_social_links.${index}.label` as const)}
-                          className="px-3"
-                          placeholder="微信公众号"
-                        />
+                        <ThemeAwareInput type="text" {...register(`footer_social_links.${index}.label` as const)} className="px-3" placeholder="微信 / GitHub / LinkedIn" />
                       </div>
                       <div>
                         <label className="block text-sm font-medium text-theme-text mb-1">跳转链接</label>
-                        <ThemeAwareInput
-                          type="text"
-                          {...register(`footer_social_links.${index}.url` as const)}
-                          className="px-3"
-                          placeholder="https://..."
-                        />
+                        <ThemeAwareInput type="text" {...register(`footer_social_links.${index}.url` as const)} className="px-3" placeholder="https://..." />
                       </div>
                       <div className="space-y-2 md:col-span-2">
                         <label className="block text-sm font-medium text-theme-text">社交图标</label>
@@ -929,10 +632,7 @@ export default function AdminSettingsPage() {
                           <button
                             type="button"
                             onClick={() =>
-                              openAssetPicker(
-                                { type: 'socialLinkIcon', index },
-                                getValues(`footer_social_links.${index}.icon` as const)
-                              )
+                              openAssetPicker({ type: 'socialLinkIcon', index }, getValues(`footer_social_links.${index}.icon` as const))
                             }
                             className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm"
                           >
@@ -950,24 +650,60 @@ export default function AdminSettingsPage() {
                             onChange={event => handleSocialColorChange(index, event.target.value)}
                             className="h-10 w-16 rounded border border-theme-divider bg-transparent cursor-pointer"
                           />
-                          <ThemeAwareInput
-                            type="text"
-                            placeholder="示例：#0EA5E9"
-                            {...register(`footer_social_links.${index}.color` as const)}
-                            className="flex-1"
-                          />
-                          <button
-                            type="button"
-                            onClick={() => handleSocialColorChange(index, '')}
-                            className="px-3 py-2 text-xs rounded-lg border border-theme-divider text-theme-textSecondary hover:text-theme-text transition-colors"
-                          >
+                          <ThemeAwareInput type="text" placeholder="示例：#0EA5E9" {...register(`footer_social_links.${index}.color` as const)} className="flex-1" />
+                          <button type="button" onClick={() => handleSocialColorChange(index, '')} className="px-3 py-2 text-xs rounded-lg border border-theme-divider text-theme-textSecondary hover:text-theme-text transition-colors">
                             清除颜色
                           </button>
                         </div>
-                      <p className="text-xs text-theme-textSecondary">
-                        支持十六进制颜色值。例如 <code>#0EA5E9</code>。若图标为 SVG，将以该颜色渲染。
-                      </p>
+                        <p className="text-xs text-theme-textSecondary">
+                          支持十六进制颜色值。如为 SVG 图标，渲染时会应用该颜色。
+                        </p>
                       </div>
+
+                      <div className="space-y-2 md:col-span-2">
+                        <label className="block text-sm font-medium text-theme-text mb-1">悬停弹出图片</label>
+                        <div className="space-y-2">
+                          <label className="inline-flex items-center gap-2 text-sm text-theme-text">
+                            <input
+                              type="checkbox"
+                              {...register(`footer_social_links.${index}.show_hover_image` as const)}
+                              className="h-4 w-4 text-tech-accent border-theme-divider rounded"
+                            />
+                            <span>启用悬浮图片提示</span>
+                          </label>
+                          <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                            <ThemeAwareInput
+                              type="text"
+                              readOnly
+                              {...register(`footer_social_links.${index}.hover_image` as const)}
+                              className="flex-1 cursor-not-allowed bg-theme-surfaceAlt text-theme-textSecondary"
+                              placeholder="选择悬浮时展示的小图（如二维码、Logo）"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                openAssetPicker({ type: 'socialLinkHoverImage', index }, getValues(`footer_social_links.${index}.hover_image` as const))
+                              }
+                              className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm"
+                            >
+                              <ImageIcon className="w-4 h-4 mr-2" />
+                              选择素材
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setValue(`footer_social_links.${index}.hover_image` as const, '', { shouldDirty: true })
+                                setValue(`footer_social_links.${index}.show_hover_image` as const, false, { shouldDirty: true })
+                              }}
+                              className="px-3 py-2 text-xs rounded-lg border border-theme-divider text-theme-textSecondary hover:text-theme-text transition-colors"
+                            >
+                              清除
+                            </button>
+                          </div>
+                        </div>
+                        <p className="text-xs text-theme-textSecondary">勾选并设置图片后，鼠标悬停该社交图标时会弹出预览图。</p>
+                      </div>
+
                       <div className="flex items-end space-x-2">
                         <div className="flex-1">
                           <label className="block text-sm font-medium text-theme-text mb-1">打开方式</label>
@@ -976,17 +712,14 @@ export default function AdminSettingsPage() {
                             <option value="_self">当前窗口</option>
                           </ThemeAwareSelect>
                         </div>
-                        <button
-                          type="button"
-                          onClick={() => removeFooterSocialLink(index)}
-                          className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors"
-                        >
+                        <button type="button" onClick={() => removeFooterSocialLink(index)} className="p-2 text-red-500 hover:bg-red-50 rounded-lg transition-colors">
                           <Trash2 className="w-5 h-5" />
                         </button>
                       </div>
                     </div>
                   )
                 })}
+
                 <button
                   type="button"
                   onClick={() =>
@@ -996,7 +729,9 @@ export default function AdminSettingsPage() {
                       url: '',
                       target: '_blank',
                       icon: '',
-                      color: ''
+                      color: '',
+                      show_hover_image: false,
+                      hover_image: ''
                     })
                   }
                   className="inline-flex items-center px-4 py-2 bg-tech-accent text-white rounded-lg hover:bg-tech-accent/90 transition-colors"
@@ -1009,12 +744,7 @@ export default function AdminSettingsPage() {
           </motion.div>
 
           {/* 页脚预览 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.3 }}
-            className="bg-theme-surface p-6 rounded-xl shadow-xl border border-theme-divider"
-          >
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }} className="bg-theme-surface p-6 rounded-xl shadow-xl border border-theme-divider">
             <div className="flex items-center space-x-3 mb-4">
               <SettingsIcon className="w-6 h-6 text-theme-accent" />
               <div>
@@ -1037,26 +767,12 @@ export default function AdminSettingsPage() {
             </div>
           </motion.div>
 
-          {/* 操作栏 */}
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.32 }}
-            className="flex justify-end space-x-4"
-          >
-            <button
-              type="button"
-              onClick={() => reset(settings || {})}
-              className="px-6 py-2 border border-theme-divider text-theme-textSecondary rounded-lg hover:text-theme-text hover:bg-theme-surfaceAlt transition-colors"
-              disabled={!isDirty || isSaving}
-            >
+          {/* 操作区 */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.32 }} className="flex justify-end space-x-4">
+            <button type="button" onClick={() => reset(settings || {})} className="px-6 py-2 border border-theme-divider text-theme-textSecondary rounded-lg hover:text-theme-text hover:bg-theme-surfaceAlt transition-colors" disabled={!isDirty || isSaving}>
               重置
             </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="inline-flex items-center px-6 py-2 bg-tech-accent text-white rounded-lg hover:bg-tech-accent/90 transition-colors disabled:opacity-50"
-            >
+            <button type="submit" disabled={isSaving} className="inline-flex items-center px-6 py-2 bg-tech-accent text-white rounded-lg hover:bg-tech-accent/90 transition-colors disabled:opacity-50">
               <Save className="w-4 h-4 mr-2" />
               {isSaving ? '保存中...' : '保存设置'}
             </button>
@@ -1064,11 +780,7 @@ export default function AdminSettingsPage() {
 
           {/* 提示 */}
           {isDirty && (
-            <motion.div
-              initial={{ opacity: 0, y: 10 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="bg-yellow-50 border border-yellow-200 rounded-lg p-4"
-            >
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
               <div className="flex items-center">
                 <AlertTriangle className="w-5 h-5 text-yellow-600 mr-2" />
                 <p className="text-sm text-yellow-700">有未保存的更改，请及时保存。</p>
@@ -1077,23 +789,9 @@ export default function AdminSettingsPage() {
           )}
         </form>
 
-        <AssetPickerModal
-          isOpen={isAssetPickerOpen}
-          onClose={closeAssetPicker}
-          onSelect={handleAssetSelect}
-          initialSource={assetPickerSource}
-        />
-        <UserProfileModal
-          isOpen={showProfileModal}
-          user={user}
-          onClose={() => setShowProfileModal(false)}
-          onProfileUpdated={handlePasswordChanged}
-        />
-        <ChangePasswordModal
-          isOpen={showPasswordModal}
-          onClose={() => setShowPasswordModal(false)}
-          onPasswordChanged={handlePasswordChanged}
-        />
+        <AssetPickerModal isOpen={isAssetPickerOpen} onClose={closeAssetPicker} onSelect={handleAssetSelect} initialSource={assetPickerSource} />
+        <UserProfileModal isOpen={showProfileModal} user={user} onClose={() => setShowProfileModal(false)} onProfileUpdated={fetchUserProfile} />
+        <ChangePasswordModal isOpen={showPasswordModal} onClose={() => setShowPasswordModal(false)} onPasswordChanged={fetchUserProfile} />
       </div>
     </AdminLayout>
   )

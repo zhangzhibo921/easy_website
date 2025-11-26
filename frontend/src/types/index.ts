@@ -156,6 +156,8 @@ export interface FooterSocialLink {
   icon?: string | null
   target?: '_self' | '_blank'
   color?: string | null
+  show_hover_image?: boolean
+  hover_image?: string | null
 }
 
 export interface ThemeOverrideSettings {

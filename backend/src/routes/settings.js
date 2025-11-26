@@ -146,7 +146,9 @@ const normalizeFooterSocialLinks = (links) => {
       url: sanitizeString(link.url, '#') || '#',
       icon: sanitizeString(link.icon, ''),
       target: link.target === '_self' ? '_self' : '_blank',
-      color: sanitizeString(link.color, '')
+      color: sanitizeString(link.color, ''),
+      show_hover_image: link.show_hover_image === true,
+      hover_image: sanitizeString(link.hover_image, '')
     }))
 }
 

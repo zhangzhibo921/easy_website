@@ -166,7 +166,9 @@ const settingsSchemas = {
         url: Joi.string().max(500).allow('').required(),
         icon: Joi.string().allow('', null).optional(),
         target: Joi.string().valid('_self', '_blank').default('_blank'),
-        color: Joi.string().allow('', null).optional()
+        color: Joi.string().allow('', null).optional(),
+        show_hover_image: Joi.boolean().optional(),
+        hover_image: Joi.string().allow('', null).optional()
       })
     ).optional(),
     theme_background: Joi.string()

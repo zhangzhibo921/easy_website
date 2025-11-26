@@ -1,5 +1,6 @@
-import React, { useEffect, useMemo, useState } from 'react'
+﻿import React, { useEffect, useMemo, useState } from 'react'
 import Link from 'next/link'
+import { createPortal } from 'react-dom'
 import { Mail, Phone, MapPin, ExternalLink } from 'lucide-react'
 import { useSettings } from '@/contexts/SettingsContext'
 import { getCurrentThemeId, getThemeById } from '@/styles/themes'
@@ -70,6 +71,13 @@ export default function ThemeAwareFooter({
     descriptionColor: 'rgb(209, 213, 219)',
     iconBackgroundColor: 'rgba(255, 255, 255, 0.1)'
   })
+  const [hoverPreview, setHoverPreview] = useState<{
+    src: string
+    label: string
+    x: number
+    y: number
+    visible: boolean
+  }>({ src: '', label: '', x: 0, y: 0, visible: false })
 
   useEffect(() => {
     setIsClient(true)
@@ -142,9 +150,7 @@ export default function ThemeAwareFooter({
       }))
   }, [socialLinks])
 
-  const socialLinksToRender = resolvedFooterSocialLinks.length
-    ? resolvedFooterSocialLinks
-    : legacySocialLinks
+  const socialLinksToRender = resolvedFooterSocialLinks.length ? resolvedFooterSocialLinks : legacySocialLinks
 
   const footerSections = Array.isArray(providedFooterLayout?.sections)
     ? providedFooterLayout.sections
@@ -209,9 +215,7 @@ export default function ThemeAwareFooter({
   const brandInfo = hasExplicitFooterLayout
     ? (providedFooterLayout?.brand || { name: '', description: '', logo: '' })
     : (resolvedFooterLayout.brand || getDefaultFooterLayout().brand)
-  const brandNameToShow = hasExplicitFooterLayout
-    ? (brandInfo.name || '')
-    : (brandInfo.name || siteName)
+  const brandNameToShow = hasExplicitFooterLayout ? (brandInfo.name || '') : (brandInfo.name || siteName)
 
   const hasContactInfo = !!(contactInfo?.email || contactInfo?.phone || contactInfo?.address)
   const hasFooterLayoutContent = !!(
@@ -229,13 +233,30 @@ export default function ThemeAwareFooter({
     color: footerStyles.textColor
   }
 
+  const handleHover = (
+    link: FooterSocialLink,
+    e: React.MouseEvent<HTMLAnchorElement, MouseEvent>,
+    show: boolean
+  ) => {
+    if (!isClient) return
+    if (!show || !link.show_hover_image || !link.hover_image) {
+      setHoverPreview(prev => ({ ...prev, visible: false }))
+      return
+    }
+    const rect = e.currentTarget.getBoundingClientRect()
+    setHoverPreview({
+      src: link.hover_image || '',
+      label: link.label,
+      x: rect.left + rect.width / 2,
+      y: rect.top - 12,
+      visible: true
+    })
+  }
+
   const renderSocialIcon = (link: FooterSocialLink, iconColor?: string) => {
     if (!link.icon) {
       return (
-        <span
-          className="text-sm font-semibold uppercase"
-          style={iconColor ? { color: iconColor } : undefined}
-        >
+        <span className="text-sm font-semibold uppercase" style={iconColor ? { color: iconColor } : undefined}>
           {link.label.slice(0, 2)}
         </span>
       )
@@ -267,139 +288,152 @@ export default function ThemeAwareFooter({
       return <span className="w-6 h-6 inline-block" style={maskStyle} aria-label={link.label} />
     }
 
-    return (
-      <img
-        src={link.icon}
-        alt={link.label}
-        className="w-6 h-6 object-contain"
-        loading="lazy"
-      />
-    )
+    return <img src={link.icon} alt={link.label} className="w-6 h-6 object-contain" loading="lazy" />
   }
 
   return (
-    <footer className={`relative z-10 ${className}`} style={footerStyleObject}>
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10">
-        <div className="grid gap-8 lg:grid-cols-12 items-start">
-          <div className="space-y-5 lg:col-span-3">
-            <div className="space-y-2">
-              <p
-                className="text-sm font-semibold uppercase tracking-wide"
-                style={{ color: footerStyles.titleColor }}
-              >
-                {brandNameToShow}
-              </p>
-
-              {brandInfo.description && (
-                <p className="text-xs leading-relaxed" style={{ color: footerStyles.descriptionColor }}>
-                  {brandInfo.description}
+    <>
+      <footer className={`relative z-10 ${className}`} style={footerStyleObject}>
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-12 space-y-10">
+          <div className="grid gap-8 lg:grid-cols-12 items-start">
+            <div className="space-y-5 lg:col-span-3">
+              <div className="space-y-2">
+                <p className="text-sm font-semibold uppercase tracking-wide" style={{ color: footerStyles.titleColor }}>
+                  {brandNameToShow}
                 </p>
-              )}
-            </div>
+                {brandInfo.description && (
+                  <p className="text-xs leading-relaxed" style={{ color: footerStyles.descriptionColor }}>
+                    {brandInfo.description}
+                  </p>
+                )}
+              </div>
 
-            <div className="space-y-2 text-xs">
-              {contactInfo.email && (
-                <a
-                  href={`mailto:${contactInfo.email}`}
-                  className="flex items-center space-x-2 text-xs transition-colors duration-300 max-w-[17rem]"
-                  style={{ color: footerStyles.textColor }}
-                >
-                  <Mail className="w-4 h-4" />
-                  <span>{contactInfo.email}</span>
-                </a>
-              )}
-              {contactInfo.phone && (
-                <a
-                  href={`tel:${contactInfo.phone}`}
-                  className="flex items-center space-x-2 text-xs transition-colors duration-300 max-w-[17rem]"
-                  style={{ color: footerStyles.textColor }}
-                >
-                  <Phone className="w-4 h-4" />
-                  <span>{contactInfo.phone}</span>
-                </a>
-              )}
-              {contactInfo.address && (
-                <div
-                  className="flex items-start space-x-2 leading-relaxed max-w-[17rem] text-xs"
-                  style={{ color: footerStyles.textColor }}
-                >
-                  <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
-                  <span>{contactInfo.address}</span>
-                </div>
-              )}
-            </div>
-          </div>
-
-          <div className={`grid gap-5 ${sectionGridClass} lg:col-span-6`}>
-            {navigationSections.map(section => (
-              <div key={section.id} className="space-y-2">
-                <div>
-                  <h4
-                    className="font-semibold text-sm uppercase tracking-wide"
-                    style={{ color: footerStyles.titleColor }}
+              <div className="space-y-2 text-xs">
+                {contactInfo.email && (
+                  <a
+                    href={`mailto:${contactInfo.email}`}
+                    className="flex items-center space-x-2 text-xs transition-colors duration-300 max-w-[17rem]"
+                    style={{ color: footerStyles.textColor }}
                   >
-                    {section.title}
-                  </h4>
-                  {section.description && (
-                    <p className="text-xs mt-1" style={{ color: footerStyles.descriptionColor }}>
-                      {section.description}
-                    </p>
-                  )}
-                </div>
-                <ul className="space-y-1.5">
-                  {(section.links || []).map(link => (
-                    <li key={link.id || `${section.id}-${link.label}`}>
-                      <Link
-                        href={link.url}
-                        className="flex items-center text-xs transition-colors duration-300"
-                        style={{ color: footerStyles.linkColor }}
-                        target={link.target || '_self'}
-                        rel={link.target === '_blank' ? 'noopener noreferrer' : undefined}
-                      >
-                        <span>{link.label}</span>
-                        {link.target === '_blank' && <ExternalLink className="w-3 h-3 ml-1" />}
-                      </Link>
-                    </li>
-                  ))}
-                </ul>
+                    <Mail className="w-4 h-4" />
+                    <span>{contactInfo.email}</span>
+                  </a>
+                )}
+                {contactInfo.phone && (
+                  <a
+                    href={`tel:${contactInfo.phone}`}
+                    className="flex items-center space-x-2 text-xs transition-colors duration-300 max-w-[17rem]"
+                    style={{ color: footerStyles.textColor }}
+                  >
+                    <Phone className="w-4 h-4" />
+                    <span>{contactInfo.phone}</span>
+                  </a>
+                )}
+                {contactInfo.address && (
+                  <div
+                    className="flex items-start space-x-2 leading-relaxed max-w-[17rem] text-xs"
+                    style={{ color: footerStyles.textColor }}
+                  >
+                    <MapPin className="w-4 h-4 mt-0.5 flex-shrink-0" />
+                    <span>{contactInfo.address}</span>
+                  </div>
+                )}
               </div>
-            ))}
-          </div>
+            </div>
 
-          <div className="space-y-4 lg:col-span-3">
-            {socialSection && socialLinksToRender.length > 0 && (
-              <div className="space-y-3">
-                <h4
-                  className="font-semibold text-sm uppercase tracking-wide"
-                  style={{ color: footerStyles.titleColor }}
-                >
-                  关注我们
-                </h4>
-                <div className="flex flex-wrap gap-3">
-                  {socialLinksToRender.map(link => {
-                    const iconColor = normalizeHexColor(link.color)
-                    return (
-                      <a
-                        key={link.id}
-                        href={link.url}
-                        target={link.target || '_blank'}
-                        rel="noopener noreferrer"
-                        className="w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-300"
-                        style={{
-                          backgroundColor: footerStyles.iconBackgroundColor,
-                          color: iconColor || footerStyles.textColor
-                        }}
-                      >
-                        {renderSocialIcon(link, iconColor)}
-                      </a>
-                    )
-                  })}
+            <div className={`grid gap-5 ${sectionGridClass} lg:col-span-6`}>
+              {navigationSections.map(section => (
+                <div key={section.id} className="space-y-2">
+                  <div>
+                    <h4
+                      className="font-semibold text-sm uppercase tracking-wide"
+                      style={{ color: footerStyles.titleColor }}
+                    >
+                      {section.title}
+                    </h4>
+                    {section.description && (
+                      <p className="text-xs mt-1" style={{ color: footerStyles.descriptionColor }}>
+                        {section.description}
+                      </p>
+                    )}
+                  </div>
+                  <ul className="space-y-1.5">
+                    {(section.links || []).map(link => (
+                      <li key={link.id || `${section.id}-${link.label}`}>
+                        <Link
+                          href={link.url}
+                          className="flex items-center text-xs transition-colors duration-300"
+                          style={{ color: footerStyles.linkColor }}
+                          target={link.target || '_self'}
+                          rel={link.target === '_blank' ? 'noopener noreferrer' : undefined}
+                        >
+                          <span>{link.label}</span>
+                          {link.target === '_blank' && <ExternalLink className="w-3 h-3 ml-1" />}
+                        </Link>
+                      </li>
+                    ))}
+                  </ul>
                 </div>
-              </div>
-            )}
+              ))}
+            </div>
+
+            <div className="space-y-4 lg:col-span-3">
+              {socialSection && socialLinksToRender.length > 0 && (
+                <div className="space-y-3">
+                  <h4 className="font-semibold text-sm uppercase tracking-wide" style={{ color: footerStyles.titleColor }}>
+                    关注我们
+                  </h4>
+                  <div className="flex flex-wrap gap-3">
+                    {socialLinksToRender.map(link => {
+                      const iconColor = normalizeHexColor(link.color)
+                      return (
+                        <div key={link.id} className="relative group">
+                          <a
+                            href={link.url}
+                            target={link.target || '_blank'}
+                            rel="noopener noreferrer"
+                            className="w-10 h-10 rounded-full flex items-center justify-center transition-colors duration-300"
+                            style={{
+                              backgroundColor: footerStyles.iconBackgroundColor,
+                              color: iconColor || footerStyles.textColor
+                            }}
+                            onMouseEnter={(e) => handleHover(link, e, true)}
+                            onMouseLeave={(e) => handleHover(link, e, false)}
+                          >
+                            {renderSocialIcon(link, iconColor)}
+                          </a>
+                        </div>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
-      </div>
-    </footer>
+      </footer>
+      {isClient && hoverPreview.visible && hoverPreview.src &&
+        createPortal(
+          <div
+            className="fixed z-[9999] pointer-events-none"
+            style={{
+              left: hoverPreview.x,
+              top: hoverPreview.y,
+              transform: 'translate(-50%, -100%)'
+            }}
+          >
+            <div className="rounded-lg overflow-hidden shadow-2xl border border-black/10 bg-white/95 backdrop-blur-sm">
+              <img
+                src={hoverPreview.src}
+                alt={`${hoverPreview.label} 预览图`}
+                className="object-contain"
+                style={{ width: 300, maxHeight: 320 }}
+              />
+            </div>
+          </div>,
+          document.body
+        )
+      }
+    </>
   )
 }

@@ -47,7 +47,9 @@ export const getDefaultFooterSocialLinks = (): FooterSocialLink[] => [
     icon: '/system-default/icons/wechat.svg',
     url: 'https://weixin.qq.com',
     target: '_blank',
-    color: ''
+    color: '',
+    show_hover_image: false,
+    hover_image: ''
   },
   {
     id: 'weibo',
@@ -55,7 +57,9 @@ export const getDefaultFooterSocialLinks = (): FooterSocialLink[] => [
     icon: '/system-default/icons/weibo.svg',
     url: 'https://weibo.com',
     target: '_blank',
-    color: ''
+    color: '',
+    show_hover_image: false,
+    hover_image: ''
   },
   {
     id: 'linkedin',
@@ -63,6 +67,8 @@ export const getDefaultFooterSocialLinks = (): FooterSocialLink[] => [
     icon: '/system-default/icons/linkedin.svg',
     url: 'https://www.linkedin.com',
     target: '_blank',
-    color: ''
+    color: '',
+    show_hover_image: false,
+    hover_image: ''
   }
 ]
