@@ -132,7 +132,7 @@ export const CyberSuperCardPreview: React.FC<{ component: TemplateComponent }> =
   }, [cards])
 
   const perRow = clampCardsPerRow(cardsPerRow)
-  const containerClass = widthOption === 'standard' ? 'max-w-6xl mx-auto' : 'w-full'
+  const containerClass = widthOption === 'standard' ? 'max-w-screen-2xl mx-auto' : 'w-full'
   const backgroundClass =
     backgroundColorOption === 'transparent' ? 'cyber-super-card-shell--transparent' : 'cyber-super-card-shell--default'
   const gridCols = gridClassMap[perRow] || gridClassMap[3]
