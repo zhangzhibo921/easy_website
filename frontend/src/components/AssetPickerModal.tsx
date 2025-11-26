@@ -383,7 +383,7 @@ const AssetPickerModal = ({
     <div key={folder.path} className="space-y-1">
       <button
         className={`flex items-center w-full px-2 py-1 text-sm rounded ${
-          currentFolder[activeSource] === folder.path ? 'bg-tech-accent text-white' : 'text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700'
+          currentFolder[activeSource] === folder.path ? 'bg-tech-accent text-black' : 'text-black hover:bg-gray-100'
         }`}
         style={{ paddingLeft: `${level * 12 + 8}px` }}
         onClick={() => handleFolderSelect(folder.path)}
@@ -401,11 +401,14 @@ const AssetPickerModal = ({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50">
-      <div className="w-full max-w-5xl bg-white dark:bg-tech-light rounded-2xl shadow-xl max-h-[90vh] overflow-hidden text-gray-900 dark:text-gray-100">
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+      <div
+        className="w-full max-w-5xl bg-white rounded-2xl shadow-xl max-h-[90vh] overflow-hidden text-gray-900"
+        style={{ color: '#111827' }}
+      >
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div>
-            <h2 className="text-lg font-semibold text-gray-900 dark:text-white">选择素材</h2>
-            <p className="text-sm text-gray-500 dark:text-gray-400">从用户素材或系统默认素材中选择图片 / 图标</p>
+            <h2 className="text-lg font-semibold text-gray-900">选择素材</h2>
+            <p className="text-sm text-gray-500">从用户素材或系统默认素材中选择图片 / 图标</p>
           </div>
           <button className="p-2 text-gray-500 hover:text-gray-700" onClick={onClose}>
             <X className="w-5 h-5" />
@@ -417,7 +420,7 @@ const AssetPickerModal = ({
             <button
               key={source}
               className={`px-4 py-2 rounded-full text-sm font-medium ${
-                activeSource === source ? 'bg-tech-accent text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-300'
+                activeSource === source ? 'bg-tech-accent text-white' : 'bg-gray-100 text-gray-700'
               }`}
               onClick={() => setActiveSource(source)}
             >
@@ -435,7 +438,7 @@ const AssetPickerModal = ({
                 value={searchTerm}
                 onChange={(e) => setSearchTerm(e.target.value)}
                 placeholder="搜索素材..."
-                className="w-full pl-10 pr-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-800 text-gray-900 dark:text-white focus:ring-2 focus:ring-tech-accent focus:border-transparent"
+                className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg bg-white text-gray-900 focus:ring-2 focus:ring-tech-accent focus:border-transparent"
               />
             </div>
             <div className="flex items-center gap-2 text-xs text-gray-500">
@@ -451,7 +454,7 @@ const AssetPickerModal = ({
                   }))
                   loadFiles(activeSource, currentFolder[activeSource], 1, newLimit)
                 }}
-                className="px-3 py-1 border border-gray-300 dark:border-gray-600 rounded bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200 focus:ring-2 focus:ring-tech-accent focus:border-transparent"
+                className="px-3 py-1 border border-gray-300 rounded bg-white text-gray-700 focus:ring-2 focus:ring-tech-accent focus:border-transparent"
               >
                 {pageLimitOptions.map(limit => (
                   <option key={limit} value={limit}>{limit} 项/页</option>
@@ -462,8 +465,8 @@ const AssetPickerModal = ({
         </div>
 
         <div className="px-6 pb-6 flex gap-4 max-h-[60vh]">
-          <div className="w-64 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-3 overflow-y-auto">
-            <h3 className="text-sm font-semibold text-gray-700 dark:text-gray-200 mb-3 flex items-center">
+          <div className="w-64 bg-gray-50 rounded-lg border border-gray-200 p-3 overflow-y-auto">
+            <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center">
               <Folder className="w-4 h-4 mr-2" />
               目录
             </h3>
@@ -479,7 +482,7 @@ const AssetPickerModal = ({
             )}
           </div>
 
-          <div className="flex-1 bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-700 p-4 overflow-y-auto">
+          <div className="flex-1 bg-gray-50 rounded-lg border border-gray-200 p-4 overflow-y-auto">
             {isLoadingFiles ? (
               <div className="flex items-center justify-center h-full text-gray-500">
                 <Loader2 className="w-5 h-5 animate-spin mr-2" />
@@ -498,10 +501,10 @@ const AssetPickerModal = ({
                   return (
                     <button
                       key={file.path || file.url}
-                      className={`relative bg-white dark:bg-gray-800 rounded-xl border ${
+                      className={`relative bg-white rounded-xl border ${
                         isSelected
                           ? 'border-tech-accent ring-2 ring-tech-accent/40'
-                          : 'border-gray-200 dark:border-gray-700'
+                          : 'border-gray-200'
                       } shadow-sm hover:shadow transition-shadow overflow-hidden text-left`}
                       onClick={() => {
                         if (isMultiMode) {
@@ -523,7 +526,7 @@ const AssetPickerModal = ({
                           ✓
                         </div>
                       )}
-                      <div className="h-32 bg-gray-100 dark:bg-gray-700 flex items-center justify-center overflow-hidden">
+                      <div className="h-32 bg-gray-100 flex items-center justify-center overflow-hidden">
                         {isSystemSvgFile(file, activeSource) ? (
                           renderSystemIconPreview(file)
                         ) : isImageFile(file) ? (
@@ -544,8 +547,8 @@ const AssetPickerModal = ({
                         )}
                       </div>
                       <div className="p-3">
-                        <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{file.name}</p>
-                        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
+                        <p className="text-sm font-medium text-gray-900 truncate">{file.name}</p>
+                        <p className="text-xs text-gray-500 mt-1">{(file.size / 1024).toFixed(1)} KB</p>
                       </div>
                     </button>
                   )
@@ -558,7 +561,7 @@ const AssetPickerModal = ({
                 <span className="text-xs text-gray-500">已选择 {selectedCount} 个素材</span>
                 <div className="space-x-2">
                   <button
-                    className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
+                    className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50"
                     onClick={() => setMultiSelection({})}
                     disabled={selectedCount === 0}
                   >
@@ -581,14 +584,14 @@ const AssetPickerModal = ({
               </span>
               <div className="space-x-2">
                 <button
-                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50"
                   onClick={() => handlePageChange('prev')}
                   disabled={meta[activeSource].page <= 1}
                 >
                   上一页
                 </button>
                 <button
-                  className="px-3 py-1 text-sm border border-gray-300 dark:border-gray-600 rounded disabled:opacity-50"
+                  className="px-3 py-1 text-sm border border-gray-300 rounded disabled:opacity-50"
                   onClick={() => handlePageChange('next')}
                   disabled={meta[activeSource].page >= meta[activeSource].totalPages}
                 >
