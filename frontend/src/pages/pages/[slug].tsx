@@ -28,10 +28,16 @@ export default function DynamicPage({ initialPage, initialError, initialSettings
   const [error, setError] = useState<string | null>(initialError)
 
   useEffect(() => {
-    if (!page && !error && slug && typeof slug === 'string') {
+    setPage(initialPage)
+    setError(initialError)
+    setIsLoading(!initialPage && !initialError)
+  }, [initialPage, initialError])
+
+  useEffect(() => {
+    if (slug && typeof slug === 'string' && page?.slug !== slug) {
       fetchPage(slug)
     }
-  }, [slug])
+  }, [slug, page?.slug])
 
   const fetchPage = async (pageSlug: string) => {
     try {
