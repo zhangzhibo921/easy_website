@@ -139,12 +139,22 @@ export default function AdminSettingsPage() {
     formState: { isDirty }
   } = useForm<Settings>({
     defaultValues: {
+      site_name: '',
+      company_name: '',
+      site_description: '',
+      contact_email: '',
+      contact_phone: '',
+      address: '',
+      site_logo: '',
+      site_favicon: '',
+      icp_number: '',
       site_theme: 'neo-futuristic',
       theme_background: 'theme-default' as ThemeBackgroundChoice,
       quick_links: [],
       site_statement: '',
       icp_link: '',
       site_keywords: '',
+      social_links: {},
       footer_layout: EMPTY_FOOTER_LAYOUT,
       footer_social_links: []
     },
@@ -397,6 +407,75 @@ export default function AdminSettingsPage() {
         </motion.div>
 
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {/* 站点信息与全局 SEO */}
+          <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.08 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder space-y-6">
+            <div className="flex items-center space-x-3">
+              <Globe className="w-6 h-6 text-theme-accent" />
+              <div>
+                <h2 className="text-xl font-bold text-theme-text">站点信息与全局 SEO</h2>
+                <p className="text-sm text-theme-textSecondary">设置站点名称、描述、关键词及基础图标，影响页面默认 meta 信息。</p>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium text-theme-text mb-1">站点名称</label>
+                <ThemeAwareInput type="text" {...register('site_name' as const)} placeholder="请输入站点名称" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-text mb-1">公司名称</label>
+                <ThemeAwareInput type="text" {...register('company_name' as const)} placeholder="用于页眉/页脚展示的公司名称" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-theme-text mb-1">SEO 描述</label>
+                <ThemeAwareTextarea rows={3} {...register('site_description' as const)} placeholder="用于搜索引擎与社交分享的页面描述" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-medium text-theme-text mb-1">SEO 关键词</label>
+                <ThemeAwareInput type="text" {...register('site_keywords' as const)} placeholder="关键词之间用逗号分隔，例如：产品,服务,公司" />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-text mb-1">Logo</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <ThemeAwareInput
+                    type="text"
+                    readOnly
+                    value={watchedLogo || ''}
+                    placeholder="请选择或上传品牌 Logo"
+                    className="flex-1 cursor-not-allowed bg-theme-surfaceAlt text-theme-textSecondary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openAssetPicker({ type: 'siteLogo' }, watchedLogo)}
+                    className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm"
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    选择素材
+                  </button>
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-theme-text mb-1">Favicon</label>
+                <div className="flex flex-col sm:flex-row sm:items-center gap-2">
+                  <ThemeAwareInput
+                    type="text"
+                    readOnly
+                    value={watchedFavicon || ''}
+                    placeholder="/favicon.ico"
+                    className="flex-1 cursor-not-allowed bg-theme-surfaceAlt text-theme-textSecondary"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openAssetPicker({ type: 'siteFavicon' }, watchedFavicon)}
+                    className="inline-flex items-center px-3 py-2 rounded-lg border border-theme-divider bg-theme-surfaceAlt text-theme-textSecondary hover:text-theme-text transition-colors text-sm"
+                  >
+                    <ImageIcon className="w-4 h-4 mr-2" />
+                    选择素材
+                  </button>
+                </div>
+              </div>
+            </div>
+          </motion.div>
           {/* 网站声明与备案 */}
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }} className="bg-semantic-panel p-6 rounded-xl shadow-xl border border-semantic-panelBorder">
             <div className="flex items-center space-x-3 mb-6">
