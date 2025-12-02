@@ -9,6 +9,7 @@ import { useMetaInfo } from '@/hooks/useMetaInfo'
 import { useEffect } from 'react'
 import { applyTheme, getThemeById } from '@/styles/themes'
 import { applyIsolatedThemeVariables } from '@/styles/themeComponents'
+import { applyFont } from '@/styles/fontLoader'
 
 // 内部组件来使用useMetaInfo Hook
 function AppContent({ Component, pageProps }: AppProps) {
@@ -23,6 +24,13 @@ function AppContent({ Component, pageProps }: AppProps) {
       applyIsolatedThemeVariables(settings.site_theme)
     }
   }, [settings?.site_theme])
+
+  useEffect(() => {
+    applyFont(settings?.site_font || 'inter', {
+      name: settings?.site_font_custom_name,
+      url: settings?.site_font_url
+    })
+  }, [settings?.site_font, settings?.site_font_custom_name, settings?.site_font_url])
 
   return (
     <>

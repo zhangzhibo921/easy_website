@@ -160,7 +160,7 @@ const ComponentEditor = ({
     toast.success(`已新增 ${newLogos.length} 个 Logo`)
   }
 
-  const commonFields = ['src', 'alt', 'backgroundImage', 'backgroundColor', 'shape', 'image', 'imagePosition']
+  const commonFields = ['src', 'alt', 'backgroundImage', 'backgroundColor', 'shape', 'image', 'imagePosition', 'linkUrl', 'linkTarget']
   const fieldSkipMap: Record<string, Set<string>> = {
     'cyber-showcase': new Set(['title', 'description'])
   }
@@ -187,6 +187,8 @@ const ComponentEditor = ({
               {key === 'image' && '图片'}
               {key === 'alt' && '图片描述'}
               {key === 'caption' && '图片说明'}
+              {key === 'linkUrl' && '链接地址'}
+              {key === 'linkTarget' && '打开方式'}
               {key === 'backgroundImage' && '背景图片'}
               {key === 'backgroundColor' && '背景颜色'}
               {key === 'shape' && '容器形状'}

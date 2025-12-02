@@ -8,6 +8,7 @@
   --foreground-rgb: 255, 255, 255;
   --background-start-rgb: 10, 11, 13;
   --background-end-rgb: 26, 27, 35;
+  --app-font-family: 'Inter', sans-serif;
   /* 默认主题颜色变量 - 浅色主题 */
   --color-primary: #3B82F6;
   --color-primary-rgb: 59, 130, 246;
@@ -78,13 +79,19 @@ html,
 body {
   max-width: 100vw;
   overflow-x: hidden;
-  font-family: 'Inter', sans-serif;
+  font-family: var(--app-font-family, 'Inter', sans-serif);
+  min-height: 100vh;
+}
+
+html {
+  overflow-y: auto;
 }
 
 body {
   color: var(--color-text-primary);
   background-color: var(--color-background);
-  min-height: 100vh;
+  /* 只让 html 承担滚动，避免 body 自己再产生一条滚动条 */
+  overflow: visible !important;
 }
 
 /* 科技感滚动条 */
@@ -103,6 +110,16 @@ body {
 
 ::-webkit-scrollbar-thumb:hover {
   background: linear-gradient(135deg, #6366f1, #00d4ff);
+}
+
+/* 避免自定义 HTML 片段产生内层滚动条 */
+.raw-html-section {
+  overflow: visible !important;
+}
+
+/* 让页面主体由 body 管理滚动，避免 main 自己出现滚动条 */
+main.main-content {
+  overflow: visible;
 }
 
 /* 自定义组件样式*/

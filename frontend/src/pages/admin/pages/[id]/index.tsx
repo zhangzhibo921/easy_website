@@ -21,6 +21,7 @@ import { pagesApi } from '@/utils/api'
 import { formatDateTime } from '@/utils'
 import toast from 'react-hot-toast'
 import type { PageContent } from '@/types'
+import { generateHtmlFromComponents } from '@/lib/pageContent/generateHtmlFromComponents'
 
 export default function ViewPagePage() {
   const router = useRouter()
@@ -41,7 +42,16 @@ export default function ViewPagePage() {
       const response = await pagesApi.getById(pageId)
       
       if (response.success) {
-        setPageData(response.data)
+        const page = response.data
+        let parsedTemplateData = page.template_data
+        if (page.template_data && typeof page.template_data === 'string') {
+          try {
+            parsedTemplateData = JSON.parse(page.template_data)
+          } catch (err) {
+            parsedTemplateData = null
+          }
+        }
+        setPageData({ ...page, template_data: parsedTemplateData } as PageContent)
       } else {
         toast.error('页面不存在')
         router.push('/admin/pages')
@@ -83,6 +93,14 @@ export default function ViewPagePage() {
       </AdminLayout>
     )
   }
+
+  const generatedContent =
+    pageData &&
+    (!pageData.content || pageData.content.trim() === '') &&
+    (pageData as any)?.template_data?.components &&
+    Array.isArray((pageData as any).template_data.components)
+      ? generateHtmlFromComponents((pageData as any).template_data.components)
+      : null
 
   return (
     <AdminLayout title={pageData.title} description="查看页面详情">
@@ -264,7 +282,7 @@ export default function ViewPagePage() {
                 <div className="prose dark:prose-invert max-w-none">
                   <div 
                     dangerouslySetInnerHTML={{ 
-                      __html: pageData.content?.replace(/\n/g, '<br>') || '暂无内容' 
+                      __html: (generatedContent || pageData.content)?.replace(/\n/g, '<br>') || '暂无内容' 
                     }}
                   />
                 </div>

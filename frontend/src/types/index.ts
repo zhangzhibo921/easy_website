@@ -171,6 +171,9 @@ export interface Settings {
   site_name: string
   site_description: string
   site_keywords?: string
+  site_font?: string
+  site_font_custom_name?: string
+  site_font_url?: string
   site_statement?: string
   icp_link?: string
   company_name: string

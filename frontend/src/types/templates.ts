@@ -60,6 +60,7 @@ export type ComponentType =
   | 'image-text-horizontal'
   | 'banner-carousel'
   | 'premium-pricing'
+  | 'raw-html'
   | 'link-block'
 
 export interface ComponentDefinition {

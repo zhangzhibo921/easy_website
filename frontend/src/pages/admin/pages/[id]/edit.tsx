@@ -16,6 +16,7 @@ import { useForm } from 'react-hook-form'
 import toast from 'react-hot-toast'
 import { pagesApi } from '@/utils/api'
 import type { PageForm, PageContent } from '@/types'
+import { generateHtmlFromComponents } from '@/lib/pageContent/generateHtmlFromComponents'
 
 export default function EditPagePage() {
   const router = useRouter()
@@ -50,13 +51,29 @@ export default function EditPagePage() {
       
       if (response.success) {
         const page = response.data
-        setPageData(page)
+        let parsedTemplateData = page.template_data
+        if (page.template_data && typeof page.template_data === 'string') {
+          try {
+            parsedTemplateData = JSON.parse(page.template_data)
+          } catch (err) {
+            parsedTemplateData = null
+          }
+        }
+
+        const generatedContent =
+          (!page.content || page.content.trim() === '') &&
+          parsedTemplateData?.components &&
+          Array.isArray(parsedTemplateData.components)
+            ? generateHtmlFromComponents(parsedTemplateData.components)
+            : null
+
+        setPageData({ ...page, template_data: parsedTemplateData } as PageContent)
         
         // 重置表单数据
         reset({
           title: page.title,
           slug: page.slug,
-          content: page.content,
+          content: generatedContent || page.content,
           excerpt: page.excerpt || '',
           featured_image: page.featured_image || '',
           meta_title: page.meta_title || '',

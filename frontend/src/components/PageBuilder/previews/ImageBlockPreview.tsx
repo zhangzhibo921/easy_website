@@ -1,8 +1,16 @@
-﻿import React, { useEffect, useState } from "react"
-import { TemplateComponent } from "@/types/templates"
+import React, { useEffect, useState } from 'react'
+import { TemplateComponent } from '@/types/templates'
 
 export const ImageBlockPreview: React.FC<{ component: TemplateComponent }> = ({ component }) => {
-  const { src, alt, caption, widthOption = 'full', backgroundColorOption = 'default' } = component.props
+  const {
+    src,
+    alt,
+    caption,
+    linkUrl,
+    linkTarget = '_self',
+    widthOption = 'full',
+    backgroundColorOption = 'default'
+  } = component.props || {}
 
   const containerClass = widthOption === 'standard' ? 'max-w-screen-2xl mx-auto' : 'w-full'
   const componentClass =
@@ -13,7 +21,6 @@ export const ImageBlockPreview: React.FC<{ component: TemplateComponent }> = ({ 
   const [imageLoaded, setImageLoaded] = useState(false)
   const [imageError, setImageError] = useState(false)
 
-  // 重置加载状态当 src 变化时
   useEffect(() => {
     if (src) {
       setImageLoaded(false)
@@ -21,7 +28,6 @@ export const ImageBlockPreview: React.FC<{ component: TemplateComponent }> = ({ 
     }
   }, [src])
 
-  // 预加载并处理缓存场景，避免重新打开编辑器时一直显示“加载中”
   useEffect(() => {
     if (!src) return
     const testImg = new Image()
@@ -41,6 +47,38 @@ export const ImageBlockPreview: React.FC<{ component: TemplateComponent }> = ({ 
     }
   }, [src])
 
+  const imageElement = (
+    <img
+      src={src}
+      alt={alt || '图片'}
+      className={`image-block-image w-full h-full object-cover transition-opacity duration-300 ${
+        imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
+      }`}
+      onLoad={() => {
+        setImageLoaded(true)
+        setImageError(false)
+      }}
+      onError={() => {
+        console.error('Image block failed to load:', src)
+        setImageError(true)
+        setImageLoaded(false)
+      }}
+    />
+  )
+
+  const wrappedImage = linkUrl ? (
+    <a
+      href={linkUrl}
+      target={linkTarget}
+      rel={linkTarget === '_blank' ? 'noopener noreferrer' : undefined}
+      className="block"
+    >
+      {imageElement}
+    </a>
+  ) : (
+    imageElement
+  )
+
   return (
     <div className={containerClass}>
       <div className={componentClass}>
@@ -55,22 +93,7 @@ export const ImageBlockPreview: React.FC<{ component: TemplateComponent }> = ({ 
                   </div>
                 </div>
               )}
-              <img
-                src={src}
-                alt={alt || '图片'}
-                className={`image-block-image w-full h-full object-cover transition-opacity duration-300 ${
-                  imageLoaded ? 'opacity-100' : 'opacity-0 absolute inset-0'
-                }`}
-                onLoad={() => {
-                  setImageLoaded(true)
-                  setImageError(false)
-                }}
-                onError={() => {
-                  console.error('Image block failed to load:', src)
-                  setImageError(true)
-                  setImageLoaded(false)
-                }}
-              />
+              {wrappedImage}
               {imageError && (
                 <div className="w-full h-full flex items-center justify-center">
                   <div className="text-center">

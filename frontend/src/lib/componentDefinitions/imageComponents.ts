@@ -45,6 +45,8 @@ export const imageComponents: ComponentDefinition[] = [
         src: '/images/placeholder.jpg',
         alt: '图片描述',
         caption: '',
+        linkUrl: '',
+        linkTarget: '_self',
         width: '100%',
         height: 'auto',
         widthOption: 'full',
@@ -54,6 +56,11 @@ export const imageComponents: ComponentDefinition[] = [
         { key: 'src', label: '图片地址', type: 'image', value: '', required: true },
         { key: 'alt', label: '图片描述', type: 'text', value: '' },
         { key: 'caption', label: '图片说明', type: 'text', value: '' },
+        { key: 'linkUrl', label: '链接地址（可选）', type: 'text', value: '' },
+        { key: 'linkTarget', label: '打开方式', type: 'text', value: '_self', options: [
+          { label: '当前窗口', value: '_self' },
+          { label: '新窗口', value: '_blank' }
+        ] },
         { key: 'widthOption', label: '宽度选项', type: 'text', value: 'full', options: [
           { label: '全宽', value: 'full' },
           { label: '标准宽度', value: 'standard' }

@@ -13,6 +13,7 @@ import BannerCarouselEditor from './BannerCarouselEditor'
 import LinkBlockEditor from './LinkBlockEditor'
 import ImageTextEditor from './ImageTextEditor'
 import ImageTextHorizontalEditor from './ImageTextHorizontalEditor'
+import RawHtmlEditor from './RawHtmlEditor'
 
 type CustomEditorProps = {
   component: TemplateComponent
@@ -462,6 +463,21 @@ const renderImageTextHorizontalEditor: CustomEditorRenderer = ({
   )
 }
 
+const renderRawHtmlEditor: CustomEditorRenderer = ({
+  component,
+  formData,
+  handleFieldChange
+}) => {
+  if ((component as any).type !== 'raw-html') return null
+  return (
+    <RawHtmlEditor
+      component={component}
+      formData={formData}
+      handleFieldChange={handleFieldChange}
+    />
+  )
+}
+
 const customEditors: Partial<Record<string, CustomEditorRenderer>> = {
   'video-player': renderVideoEditor,
   'banner-carousel': renderBannerCarouselEditor,
@@ -475,7 +491,8 @@ const customEditors: Partial<Record<string, CustomEditorRenderer>> = {
   'testimonials': renderTestimonialsEditor,
   'link-block': renderLinkBlockEditor,
   'image-text': renderImageTextEditor,
-  'image-text-horizontal': renderImageTextHorizontalEditor
+  'image-text-horizontal': renderImageTextHorizontalEditor,
+  'raw-html': renderRawHtmlEditor
 }
 
 export const renderCustomEditor = (props: CustomEditorProps) => {

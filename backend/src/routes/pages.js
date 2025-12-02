@@ -1,18 +1,54 @@
 const express = require('express')
 const router = express.Router()
 const db = require('../config/database')
-const { 
-  authenticateToken, 
-  requireEditor, 
-  logActivity 
-} = require('../middleware/auth')
-const { 
-  validateCreatePage, 
-  validateUpdatePage, 
+const { authenticateToken, requireEditor, logActivity } = require('../middleware/auth')
+const {
+  validateCreatePage,
+  validateUpdatePage,
   validatePagination,
   validateId,
   validateSlug
 } = require('../middleware/validation')
+const { parseTemplateData, generateHtmlFromComponents } = require('../utils/pageContent')
+
+// Helpers
+const normalizeSlug = (title, slug) => {
+  let pageSlug = slug
+  if (title && title.includes('首页') && pageSlug === '/') {
+    pageSlug = 'home'
+  }
+  if (pageSlug && typeof pageSlug === 'string') {
+    pageSlug = pageSlug.trim()
+    if (pageSlug === '' || pageSlug === '/') {
+      pageSlug = 'home'
+    }
+  } else {
+    pageSlug = 'page-' + Date.now()
+  }
+  return pageSlug
+}
+
+const attachTags = async (pageId) => {
+  try {
+    const [tags] = await db.execute(
+      `
+        SELECT t.id, t.name
+        FROM tags t
+        INNER JOIN page_tags pt ON t.id = pt.tag_id
+        WHERE pt.page_id = ?
+        ORDER BY t.name ASC
+      `,
+      [pageId]
+    )
+    return tags.map((tag) => ({
+      id: `tag_${tag.id}`,
+      name: tag.name
+    }))
+  } catch (err) {
+    console.error('获取页面标签失败:', err)
+    return []
+  }
+}
 
 // 获取所有页面（支持分页和搜索）
 router.get('/', validatePagination, async (req, res) => {
@@ -22,71 +58,58 @@ router.get('/', validatePagination, async (req, res) => {
     const limitNum = parseInt(limit)
     const offset = (pageNum - 1) * limitNum
 
-    console.log('分页参数:', { page: pageNum, limit: limitNum, offset }) // 调试日志
-
     let whereClause = ''
     let searchParams = []
 
-    // 如果是未认证用户，只显示已发布的页面
     if (!req.headers.authorization) {
       whereClause = 'WHERE published = true'
     } else {
-      // 认证用户可以看到所有页面
       whereClause = 'WHERE 1=1'
     }
 
-    // 搜索功能
     if (search) {
       whereClause += ' AND (title LIKE ? OR content LIKE ?)'
       searchParams.push(`%${search}%`, `%${search}%`)
     }
 
-    // 标签筛选
-    let tagFilterSql = '';
-    let tagFilterParams = [];
-    const tagIds = req.query.tagIds;
-    const includeNoTags = req.query.includeNoTags === 'true';
+    let tagFilterSql = ''
+    let tagFilterParams = []
+    const tagIds = req.query.tagIds
+    const includeNoTags = req.query.includeNoTags === 'true'
 
-    // 处理标签ID数组
-    let cleanedTagIds = [];
+    let cleanedTagIds = []
     if (tagIds) {
-      const tagIdArray = Array.isArray(tagIds) ? tagIds : [tagIds];
-      // 清理标签ID（移除tag_前缀并转换为数字）
+      const tagIdArray = Array.isArray(tagIds) ? tagIds : [tagIds]
       cleanedTagIds = tagIdArray
-        .map(id => {
-          const cleanId = String(id).replace(/^tag_/, '');
-          const numId = Number(cleanId);
-          return isNaN(numId) ? null : numId;
+        .map((id) => {
+          const cleanId = String(id).replace(/^tag_/, '')
+          const numId = Number(cleanId)
+          return isNaN(numId) ? null : numId
         })
-        .filter(id => id !== null && id > 0);
+        .filter((id) => id !== null && id > 0)
     }
 
-    // 构建标签筛选条件
     if (cleanedTagIds.length > 0 || includeNoTags) {
-      const conditions = [];
-
+      const conditions = []
       if (cleanedTagIds.length > 0) {
-        const placeholders = cleanedTagIds.map(() => '?').join(',');
-        conditions.push(`pages.id IN (SELECT DISTINCT page_id FROM page_tags WHERE tag_id IN (${placeholders}))`);
-        tagFilterParams = [...cleanedTagIds];
+        const placeholders = cleanedTagIds.map(() => '?').join(',')
+        conditions.push(`pages.id IN (SELECT DISTINCT page_id FROM page_tags WHERE tag_id IN (${placeholders}))`)
+        tagFilterParams = [...cleanedTagIds]
       }
-
       if (includeNoTags) {
-        conditions.push(`pages.id NOT IN (SELECT DISTINCT page_id FROM page_tags WHERE page_id IS NOT NULL)`);
+        conditions.push(`pages.id NOT IN (SELECT DISTINCT page_id FROM page_tags WHERE page_id IS NOT NULL)`)
       }
-
       if (conditions.length > 0) {
-        tagFilterSql = `AND (${conditions.join(' OR ')})`;
+        tagFilterSql = `AND (${conditions.join(' OR ')})`
       }
     }
 
-    // 获取总数
-    const countSql = `SELECT COUNT(*) as total FROM pages ${whereClause} ${tagFilterSql}`;
+    const countSql = `SELECT COUNT(*) as total FROM pages ${whereClause} ${tagFilterSql}`
     const [countResult] = await db.execute(countSql, [...searchParams, ...tagFilterParams])
     const total = countResult[0].total
 
-    // 获取页面列表
-    let sql = `
+    const [pages] = await db.execute(
+      `
       SELECT
         pages.id, pages.title, pages.slug, pages.excerpt, pages.featured_image,
         pages.meta_title, pages.meta_description, pages.published, pages.sort_order, pages.template_data,
@@ -97,48 +120,17 @@ router.get('/', validatePagination, async (req, res) => {
       ${whereClause} ${tagFilterSql}
       ORDER BY pages.sort_order ASC, pages.created_at DESC
       LIMIT ${limitNum} OFFSET ${offset}
-    `
+    `,
+      [...searchParams, ...tagFilterParams]
+    )
 
-    const [pages] = await db.execute(sql, [...searchParams, ...tagFilterParams])
-
-    // 处理每个页面的template_data和标签信息
-    const processedPages = await Promise.all(pages.map(async (page) => {
-      let processedPage = { ...page };
-
-      // 处理template_data
-      if (page.template_data) {
-        try {
-          // 如果template_data是字符串，解析它
-          if (typeof page.template_data === 'string') {
-            processedPage.template_data = JSON.parse(page.template_data);
-          }
-        } catch (parseError) {
-          console.error('解析template_data失败:', parseError);
-          processedPage.template_data = null;
-        }
-      }
-
-      // 获取页面的标签信息
-      try {
-        const [tags] = await db.execute(`
-          SELECT t.id, t.name
-          FROM tags t
-          INNER JOIN page_tags pt ON t.id = pt.tag_id
-          WHERE pt.page_id = ?
-          ORDER BY t.name ASC
-        `, [page.id]);
-
-        processedPage.tags = tags.map(tag => ({
-          id: `tag_${tag.id}`,
-          name: tag.name
-        }));
-      } catch (tagError) {
-        console.error('获取页面标签失败:', tagError);
-        processedPage.tags = [];
-      }
-
-      return processedPage;
-    }));
+    const processedPages = await Promise.all(
+      pages.map(async (page) => {
+        const processedPage = { ...page, template_data: parseTemplateData(page.template_data) }
+        processedPage.tags = await attachTags(page.id)
+        return processedPage
+      })
+    )
 
     res.json({
       success: true,
@@ -166,21 +158,25 @@ router.get('/:id/components', validateId, async (req, res) => {
   try {
     const { id } = req.params
 
-    // 首先尝试从新的component_blocks表获取数据
-    const [components] = await db.execute(`
+    const [components] = await db.execute(
+      `
       SELECT component_id as id, component_type as type, component_props as props
       FROM component_blocks
       WHERE page_id = ?
       ORDER BY sort_order ASC
-    `, [id])
+    `,
+      [id]
+    )
 
-    // 如果新表中没有数据，回退到旧的template_data方式
     if (components.length === 0) {
-      const [pages] = await db.execute(`
+      const [pages] = await db.execute(
+        `
         SELECT template_data
         FROM pages
         WHERE id = ?
-      `, [id])
+      `,
+        [id]
+      )
 
       if (pages.length === 0) {
         return res.status(404).json({
@@ -189,35 +185,17 @@ router.get('/:id/components', validateId, async (req, res) => {
         })
       }
 
-      const page = pages[0]
-      
-      // 解析template_data
-      let templateData = null;
-      if (page.template_data) {
-        try {
-          // 如果template_data是字符串，解析它
-          if (typeof page.template_data === 'string') {
-            templateData = JSON.parse(page.template_data);
-          } else {
-            templateData = page.template_data;
-          }
-        } catch (parseError) {
-          console.error('解析template_data失败:', parseError);
-          templateData = null;
-        }
-      }
-
-      res.json({
+      const templateData = parseTemplateData(pages[0].template_data)
+      return res.json({
         success: true,
         data: templateData ? templateData.components : []
       })
-    } else {
-      // 使用新的组件区块数据
-      res.json({
-        success: true,
-        data: components
-      })
     }
+
+    res.json({
+      success: true,
+      data: components
+    })
   } catch (error) {
     console.error('获取页面组件失败:', error)
     res.status(500).json({
@@ -232,14 +210,17 @@ router.get('/:id', validateId, async (req, res) => {
   try {
     const { id } = req.params
 
-    const [pages] = await db.execute(`
+    const [pages] = await db.execute(
+      `
       SELECT 
         p.*,
         u.username as created_by_name
       FROM pages p
       LEFT JOIN users u ON p.created_by = u.id
       WHERE p.id = ?
-    `, [id])
+    `,
+      [id]
+    )
 
     if (pages.length === 0) {
       return res.status(404).json({
@@ -250,7 +231,6 @@ router.get('/:id', validateId, async (req, res) => {
 
     const page = pages[0]
 
-    // 如果是未发布的页面，需要认证
     if (!page.published && !req.headers.authorization) {
       return res.status(404).json({
         success: false,
@@ -258,40 +238,9 @@ router.get('/:id', validateId, async (req, res) => {
       })
     }
 
-    // 处理template_data，确保它是有效的JSON对象
-    let processedPage = { ...page };
-    if (page.template_data) {
-      try {
-        // 如果template_data是字符串，解析它
-        if (typeof page.template_data === 'string') {
-          processedPage.template_data = JSON.parse(page.template_data);
-        }
-      } catch (parseError) {
-        console.error('解析template_data失败:', parseError);
-        processedPage.template_data = null;
-      }
-    }
+    const processedPage = { ...page, template_data: parseTemplateData(page.template_data) }
+    processedPage.tags = await attachTags(page.id)
 
-    // 获取页面的标签信息
-    try {
-      const [tags] = await db.execute(`
-        SELECT t.id, t.name
-        FROM tags t
-        INNER JOIN page_tags pt ON t.id = pt.tag_id
-        WHERE pt.page_id = ?
-        ORDER BY t.name ASC
-      `, [page.id]);
-
-      processedPage.tags = tags.map(tag => ({
-        id: `tag_${tag.id}`,
-        name: tag.name
-      }));
-    } catch (tagError) {
-      console.error('获取页面标签失败:', tagError);
-      processedPage.tags = [];
-    }
-
-    // 记录页面访问日志（仅对已发布的页面）
     if (page.published) {
       const logData = {
         user_id: req.user ? req.user.id : null,
@@ -303,13 +252,10 @@ router.get('/:id', validateId, async (req, res) => {
         user_agent: req.get('User-Agent')
       }
 
-      // 异步记录日志，不阻塞响应
       db.execute(
         'INSERT INTO activity_logs (user_id, action, resource_type, resource_id, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [logData.user_id, logData.action, logData.resource_type, logData.resource_id, logData.description, logData.ip_address, logData.user_agent]
-      ).catch(error => {
-        console.error('记录页面访问日志失败:', error)
-      })
+      ).catch((err) => console.error('记录页面访问日志失败:', err))
     }
 
     res.json({
@@ -330,14 +276,17 @@ router.get('/slug/:slug', validateSlug, async (req, res) => {
   try {
     const { slug } = req.params
 
-    const [pages] = await db.execute(`
+    const [pages] = await db.execute(
+      `
       SELECT 
         p.*,
         u.username as created_by_name
       FROM pages p
       LEFT JOIN users u ON p.created_by = u.id
       WHERE p.slug = ?
-    `, [slug])
+    `,
+      [slug]
+    )
 
     if (pages.length === 0) {
       return res.status(404).json({
@@ -348,7 +297,6 @@ router.get('/slug/:slug', validateSlug, async (req, res) => {
 
     const page = pages[0]
 
-    // 如果是未发布的页面，需要认证
     if (!page.published && !req.headers.authorization) {
       return res.status(404).json({
         success: false,
@@ -356,40 +304,9 @@ router.get('/slug/:slug', validateSlug, async (req, res) => {
       })
     }
 
-    // 处理template_data，确保它是有效的JSON对象
-    let processedPage = { ...page };
-    if (page.template_data) {
-      try {
-        // 如果template_data是字符串，解析它
-        if (typeof page.template_data === 'string') {
-          processedPage.template_data = JSON.parse(page.template_data);
-        }
-      } catch (parseError) {
-        console.error('解析template_data失败:', parseError);
-        processedPage.template_data = null;
-      }
-    }
+    const processedPage = { ...page, template_data: parseTemplateData(page.template_data) }
+    processedPage.tags = await attachTags(page.id)
 
-    // 获取页面的标签信息
-    try {
-      const [tags] = await db.execute(`
-        SELECT t.id, t.name
-        FROM tags t
-        INNER JOIN page_tags pt ON t.id = pt.tag_id
-        WHERE pt.page_id = ?
-        ORDER BY t.name ASC
-      `, [page.id]);
-
-      processedPage.tags = tags.map(tag => ({
-        id: `tag_${tag.id}`,
-        name: tag.name
-      }));
-    } catch (tagError) {
-      console.error('获取页面标签失败:', tagError);
-      processedPage.tags = [];
-    }
-
-    // 记录页面访问日志（仅对已发布的页面）
     if (page.published) {
       const logData = {
         user_id: req.user ? req.user.id : null,
@@ -401,13 +318,10 @@ router.get('/slug/:slug', validateSlug, async (req, res) => {
         user_agent: req.get('User-Agent')
       }
 
-      // 异步记录日志，不阻塞响应
       db.execute(
         'INSERT INTO activity_logs (user_id, action, resource_type, resource_id, description, ip_address, user_agent) VALUES (?, ?, ?, ?, ?, ?, ?)',
         [logData.user_id, logData.action, logData.resource_type, logData.resource_id, logData.description, logData.ip_address, logData.user_agent]
-      ).catch(error => {
-        console.error('记录页面访问日志失败:', error)
-      })
+      ).catch((err) => console.error('记录页面访问日志失败:', err))
     }
 
     res.json({
@@ -424,37 +338,23 @@ router.get('/slug/:slug', validateSlug, async (req, res) => {
 })
 
 // 创建新页面
-router.post('/', 
-  authenticateToken, 
-  requireEditor, 
-  validateCreatePage, 
+router.post('/',
+  authenticateToken,
+  requireEditor,
+  validateCreatePage,
   logActivity('create', 'page'),
   async (req, res) => {
     try {
       const pageData = { ...req.body, created_by: req.user.id }
+      const parsedTemplateData = parseTemplateData(pageData.template_data)
+      const contentFromTemplate = (!pageData.content || pageData.content.trim() === '') && parsedTemplateData?.components
+        ? generateHtmlFromComponents(parsedTemplateData.components)
+        : pageData.content
+      const templateDataToStore = parsedTemplateData ? JSON.stringify(parsedTemplateData) : null
 
-      // 检查slug是否已存在
-      let pageSlug = pageData.slug;
-      // 处理首页slug
-      if (pageData.title && pageData.title.includes('首页') && pageSlug === '/') {
-        pageSlug = 'home';
-      }
-      // 确保slug有效
-      if (pageSlug && typeof pageSlug === 'string') {
-        pageSlug = pageSlug.trim();
-        // 标准化首页slug
-        if (pageSlug === '' || pageSlug === '/') {
-          pageSlug = 'home';
-        }
-      } else {
-        pageSlug = 'page-' + Date.now();
-      }
+      const pageSlug = normalizeSlug(pageData.title, pageData.slug)
 
-      const [existingPages] = await db.execute(
-        'SELECT id FROM pages WHERE slug = ?',
-        [pageSlug]
-      )
-
+      const [existingPages] = await db.execute('SELECT id FROM pages WHERE slug = ?', [pageSlug])
       if (existingPages.length > 0) {
         return res.status(400).json({
           success: false,
@@ -462,54 +362,47 @@ router.post('/',
         })
       }
 
-      // 创建页面
-      const [result] = await db.execute(`
+      const [result] = await db.execute(
+        `
         INSERT INTO pages (
           title, slug, content, excerpt, featured_image,
           meta_title, meta_description, published, sort_order, template_data, created_by
         ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-      `, [
-        pageData.title,
-        pageSlug, // 使用处理后的slug
-        pageData.content,
-        pageData.excerpt || null,
-        pageData.featured_image || null,
-        pageData.meta_title || null,
-        pageData.meta_description || null,
-        pageData.published,
-        pageData.sort_order || 0,
-        pageData.template_data || null,
-        pageData.created_by
-      ])
+      `,
+        [
+          pageData.title,
+          pageSlug,
+          contentFromTemplate,
+          pageData.excerpt || null,
+          pageData.featured_image || null,
+          pageData.meta_title || null,
+          pageData.meta_description || null,
+          pageData.published,
+          pageData.sort_order || 0,
+          templateDataToStore,
+          pageData.created_by
+        ]
+      )
 
-      // 如果提供了标签ID，关联标签
-      // Normalize tags to handle both single string and array formats
       const tags = Array.isArray(pageData.tags)
         ? pageData.tags
-        : (typeof pageData.tags === 'string'
-          ? [pageData.tags]
-          : []);
+        : (typeof pageData.tags === 'string' ? [pageData.tags] : [])
 
       if (tags.length > 0) {
         try {
-          // 过滤无效标签ID并确保是有效的数字
           const tagValues = tags
-            .map(tagId => {
-              const rawId = typeof tagId === 'string' ? tagId.replace('tag_', '') : tagId.toString();
-              const tagIdValue = Number(rawId);
-              return isNaN(tagIdValue) ? null : [result.insertId, tagIdValue];
+            .map((tagId) => {
+              const rawId = typeof tagId === 'string' ? tagId.replace('tag_', '') : tagId.toString()
+              const tagIdValue = Number(rawId)
+              return isNaN(tagIdValue) ? null : [result.insertId, tagIdValue]
             })
-            .filter(Boolean);
+            .filter(Boolean)
 
           if (tagValues.length > 0) {
-            await db.execute(
-              'INSERT INTO page_tags (page_id, tag_id) VALUES ?',
-              [tagValues]
-            );
-            console.log(`成功关联 ${tagValues.length} 个标签到页面 ${result.insertId}`);
+            await db.execute('INSERT INTO page_tags (page_id, tag_id) VALUES ?', [tagValues])
           }
         } catch (tagError) {
-          console.error('关联页面标签失败:', tagError);
+          console.error('关联页面标签失败:', tagError)
         }
       }
 
@@ -518,38 +411,29 @@ router.post('/',
         message: '页面创建成功',
         data: {
           id: result.insertId,
-          ...pageData
+          ...pageData,
+          content: contentFromTemplate,
+          template_data: parsedTemplateData
         }
       })
 
-      // 如果创建包含组件数据，同时创建component_blocks数据
-      if (pageData.template_data) {
+      if (parsedTemplateData && parsedTemplateData.components && Array.isArray(parsedTemplateData.components)) {
         try {
-          let templateData = pageData.template_data;
-          // 如果是字符串，解析为JSON对象
-          if (typeof templateData === 'string') {
-            templateData = JSON.parse(templateData);
-          }
-          
-          // 插入组件区块数据
-          if (templateData.components && Array.isArray(templateData.components)) {
-            for (let i = 0; i < templateData.components.length; i++) {
-              const component = templateData.components[i];
-              await db.execute(
-                `INSERT INTO component_blocks (page_id, component_id, component_type, component_props, sort_order) VALUES (?, ?, ?, ?, ?)`,
-                [
-                  result.insertId,
-                  component.id,
-                  component.type,
-                  JSON.stringify(component.props),
-                  i
-                ]
-              );
-            }
+          for (let i = 0; i < parsedTemplateData.components.length; i++) {
+            const component = parsedTemplateData.components[i]
+            await db.execute(
+              `INSERT INTO component_blocks (page_id, component_id, component_type, component_props, sort_order) VALUES (?, ?, ?, ?, ?)`,
+              [
+                result.insertId,
+                component.id,
+                component.type,
+                JSON.stringify(component.props),
+                i
+              ]
+            )
           }
         } catch (componentError) {
-          console.error('创建组件区块数据失败:', componentError);
-          // 组件区块创建失败不应该影响页面创建
+          console.error('创建组件区块数据失败:', componentError)
         }
       }
     } catch (error) {
@@ -563,9 +447,9 @@ router.post('/',
 )
 
 // 更新页面
-router.put('/:id', 
-  authenticateToken, 
-  requireEditor, 
+router.put('/:id',
+  authenticateToken,
+  requireEditor,
   validateId,
   logActivity('update', 'page'),
   async (req, res) => {
@@ -574,12 +458,7 @@ router.put('/:id',
       const updates = []
       const values = []
 
-      // 检查页面是否存在
-      const [existingPages] = await db.execute(
-        'SELECT id, created_by FROM pages WHERE id = ?',
-        [id]
-      )
-
+      const [existingPages] = await db.execute('SELECT id FROM pages WHERE id = ?', [id])
       if (existingPages.length === 0) {
         return res.status(404).json({
           success: false,
@@ -587,28 +466,30 @@ router.put('/:id',
         })
       }
 
-      // 手动验证和清理数据
+      const parsedTemplateData = parseTemplateData(req.body.template_data)
+      if (parsedTemplateData && (!req.body.content || req.body.content.trim() === '')) {
+        req.body.content = generateHtmlFromComponents(parsedTemplateData.components || [])
+      }
+      if (parsedTemplateData) {
+        req.body.template_data = JSON.stringify(parsedTemplateData)
+      }
+
       const allowedFields = ['title', 'slug', 'content', 'excerpt', 'featured_image', 'meta_title', 'meta_description', 'published', 'sort_order', 'template_data']
-      
-      // 处理每个允许的字段
-      allowedFields.forEach(field => {
+
+      allowedFields.forEach((field) => {
         if (req.body[field] !== undefined) {
-          // 特殊处理slug字段，确保首页slug正确
           if (field === 'slug') {
-            let slugValue = req.body[field];
-            // 如果是首页且slug为'/'，则转换为'home'
+            let slugValue = req.body[field]
             if (req.body.title && req.body.title.includes('首页') && slugValue === '/') {
-              slugValue = 'home';
+              slugValue = 'home'
             }
-            // 确保slug不为空且有效
             if (slugValue && typeof slugValue === 'string') {
-              slugValue = slugValue.trim();
-              // 标准化首页slug
+              slugValue = slugValue.trim()
               if (slugValue === '' || slugValue === '/') {
-                slugValue = 'home';
+                slugValue = 'home'
               }
             } else {
-              slugValue = 'page-' + Date.now();
+              slugValue = 'page-' + Date.now()
             }
             updates.push(`${field} = ?`)
             values.push(slugValue)
@@ -626,19 +507,12 @@ router.put('/:id',
         })
       }
 
-      // 如果更新slug，检查是否冲突（排除自己）
       if (req.body.slug) {
-        let slugToCheck = req.body.slug;
-        // 如果是首页且slug为'/'，则转换为'home'
+        let slugToCheck = req.body.slug
         if (req.body.title === '首页' && slugToCheck === '/') {
-          slugToCheck = 'home';
+          slugToCheck = 'home'
         }
-        
-        const [conflictPages] = await db.execute(
-          'SELECT id FROM pages WHERE slug = ? AND id != ?',
-          [slugToCheck, id]
-        )
-
+        const [conflictPages] = await db.execute('SELECT id FROM pages WHERE slug = ? AND id != ?', [slugToCheck, id])
         if (conflictPages.length > 0) {
           return res.status(400).json({
             success: false,
@@ -647,162 +521,63 @@ router.put('/:id',
         }
       }
 
-      // 开始事务
-      const connection = await db.getConnection();
-      await connection.beginTransaction();
+      const connection = await db.getConnection()
+      await connection.beginTransaction()
 
       try {
         if (updates.length > 0) {
-        values.push(id);
-        await connection.execute(
-          `UPDATE pages SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`,
-          values
-        );
-      } else {
-        // Only tags are being updated - ensure timestamp is updated
-        await db.execute(
-          'UPDATE pages SET updated_at = NOW() WHERE id = ?',
-          [id]
-        );
+          values.push(id)
+          await connection.execute(`UPDATE pages SET ${updates.join(', ')}, updated_at = NOW() WHERE id = ?`, values)
+        } else {
+          await connection.execute('UPDATE pages SET updated_at = NOW() WHERE id = ?', [id])
+        }
 
-        // Re-fetch page to ensure proper response data
-        const [updatedPages] = await db.execute(
-          'SELECT * FROM pages WHERE id = ?',
-          [id]
-        );
-        if (updatedPages.length > 0) {
-          processedPage = { ...updatedPages[0] };
+        if (req.body.tags !== undefined) {
+          await connection.execute('DELETE FROM page_tags WHERE page_id = ?', [id])
+          const tagIds = Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags]
+          const validIds = tagIds
+            .map((tag) => {
+              const cleanId = String(tag).replace(/^tag_/, '')
+              const numId = Number(cleanId)
+              return Number.isInteger(numId) && numId > 0 ? numId : null
+            })
+            .filter((v) => v !== null)
 
-          // Fetch updated tags
-          try {
-            const [tags] = await db.execute(`
-              SELECT t.id, t.name
-              FROM tags t
-              INNER JOIN page_tags pt ON t.id = pt.tag_id
-              WHERE pt.page_id = ?
-            `, [id]);
-            processedPage.tags = tags.map(tag => ({
-          id: `tag_${tag.id}`,
-          name: tag.name
-        }));
-          } catch (tagError) {
-            console.error('Error fetching updated tags:', tagError);
-            processedPage.tags = [];
+          if (validIds.length > 0) {
+            const placeholders = validIds.map(() => '(?, ?)').join(',')
+            const flatValues = validIds.flatMap((tagId) => [id, tagId])
+            await connection.execute(`INSERT INTO page_tags (page_id, tag_id) VALUES ${placeholders}`, flatValues)
           }
         }
+
+        await connection.commit()
+      } catch (err) {
+        await connection.rollback()
+        throw err
+      } finally {
+        connection.release()
       }
 
-      // 更新页面标签关联：增强验证防止意外清除
-      // 强制更新标签关联（确保数据一致性）
-      // ⚡️ 强制同步标签（100%确保数据一致性）
-      if (req.body.tags !== undefined) {
-        // 1. 清空现有标签关联
-        await connection.execute('DELETE FROM page_tags WHERE page_id = ?', [id]);
-
-        // 2. 处理有效标签ID
-        const tagIds = Array.isArray(req.body.tags) ? req.body.tags : [req.body.tags];
-        const validIds = tagIds
-          .map(tag => {
-            const cleanId = String(tag).replace(/^tag_/, '');
-            const numId = Number(cleanId);
-            return Number.isInteger(numId) && numId > 0 ? numId : null;
-          })
-          .filter(id => id !== null);
-
-        // 3. 重建标签关联
-        if (validIds.length > 0) {
-          // 3. 重建标签关联
-          if (validIds.length > 0) {
-            const placeholders = validIds.map(() => '(?, ?)').join(',');
-            const flatValues = validIds.flatMap(tagId => [id, tagId]);
-            await connection.execute(
-              `INSERT INTO page_tags (page_id, tag_id) VALUES ${placeholders}`,
-              flatValues
-            );
-            console.log(`📌 成功绑定 ${validIds.length} 个标签到页面 ${id} | IDs: ${validIds.join(',')}`);
-          } else {
-            console.log(`📌 页面 ${id} 标签已清空`);
-          }
-        } else {
-          console.log(`📌 页面 ${id} 标签已清空`);
-        }
-      } // End of tags processing
-
-      await connection.commit();
-    } catch (error) {
-      await connection.rollback();
-      throw error;
-    } finally {
-      connection.release();
-    }
-
-      // 如果更新包含组件数据，同时更新component_blocks表
-      if (req.body.template_data) {
+      if (parsedTemplateData) {
         try {
-          let templateData = req.body.template_data;
-          // 如果是字符串，解析为JSON对象
-          if (typeof templateData === 'string') {
-            templateData = JSON.parse(templateData);
-          }
-          
-          // 清除现有的组件区块数据
-          await db.execute('DELETE FROM component_blocks WHERE page_id = ?', [id]);
-          
-          // 插入新的组件区块数据
-          if (templateData.components && Array.isArray(templateData.components)) {
-            for (let i = 0; i < templateData.components.length; i++) {
-              const component = templateData.components[i];
-              
-              // 处理SVG图标路径
-              let svgPaths = null;
-              const componentProps = component.props || {};
-              
-              // 为不同类型的组件处理SVG图标
-              if (component.type === 'feature-grid' && componentProps.features) {
-                const features = componentProps.features.map(feature => {
-                  if (feature.icon && feature.icon.startsWith('<svg')) {
-                    // 这里应该存储SVG文件路径，但现在我们先保持原始内容
-                    return feature;
-                  }
-                  return feature;
-                });
-                componentProps.features = features;
-              } else if (component.type === 'stats-section' && componentProps.stats) {
-                const stats = componentProps.stats.map(stat => {
-                  if (stat.icon && stat.icon.startsWith('<svg')) {
-                    // 这里应该存储SVG文件路径，但现在我们先保持原始内容
-                    return stat;
-                  }
-                  return stat;
-                });
-                componentProps.stats = stats;
-              } else if (component.type === 'timeline' && componentProps.events) {
-                const events = componentProps.events.map(event => {
-                  if (event.icon && event.icon.startsWith('<svg')) {
-                    // 这里应该存储SVG文件路径，但现在我们先保持原始内容
-                    return event;
-                  }
-                  return event;
-                });
-                componentProps.events = events;
-              }
-              
+          await db.execute('DELETE FROM component_blocks WHERE page_id = ?', [id])
+          if (parsedTemplateData.components && Array.isArray(parsedTemplateData.components)) {
+            for (let i = 0; i < parsedTemplateData.components.length; i++) {
+              const component = parsedTemplateData.components[i]
               await db.execute(
-                `INSERT INTO component_blocks (page_id, component_id, component_type, component_props, sort_order, svg_paths) VALUES (?, ?, ?, ?, ?, ?)`,
+                `INSERT INTO component_blocks (page_id, component_id, component_type, component_props, sort_order) VALUES (?, ?, ?, ?, ?)`,
                 [
                   id,
                   component.id,
                   component.type,
-                  JSON.stringify(componentProps),
-                  i,
-                  svgPaths ? JSON.stringify(svgPaths) : null
+                  JSON.stringify(component.props),
+                  i
                 ]
-              );
+              )
             }
           }
         } catch (componentError) {
-          console.error('更新组件区块数据失败:', componentError);
-          // 组件区块更新失败不应该影响页面更新
+          console.error('更新组件区块数据失败:', componentError)
         }
       }
 
@@ -821,21 +596,16 @@ router.put('/:id',
 )
 
 // 删除页面
-router.delete('/:id', 
-  authenticateToken, 
-  requireEditor, 
+router.delete('/:id',
+  authenticateToken,
+  requireEditor,
   validateId,
   logActivity('delete', 'page'),
   async (req, res) => {
     try {
       const { id } = req.params
 
-      // 检查页面是否存在
-      const [existingPages] = await db.execute(
-        'SELECT id FROM pages WHERE id = ?',
-        [id]
-      )
-
+      const [existingPages] = await db.execute('SELECT id FROM pages WHERE id = ?', [id])
       if (existingPages.length === 0) {
         return res.status(404).json({
           success: false,
@@ -843,7 +613,6 @@ router.delete('/:id',
         })
       }
 
-      // 删除页面
       await db.execute('DELETE FROM pages WHERE id = ?', [id])
 
       res.json({
@@ -861,8 +630,8 @@ router.delete('/:id',
 )
 
 // 批量更新页面排序
-router.put('/batch/sort', 
-  authenticateToken, 
+router.put('/batch/sort',
+  authenticateToken,
   requireEditor,
   async (req, res) => {
     try {
@@ -875,13 +644,9 @@ router.put('/batch/sort',
         })
       }
 
-      // 批量更新排序
       for (const page of pages) {
         if (page.id && typeof page.sort_order === 'number') {
-          await db.execute(
-            'UPDATE pages SET sort_order = ? WHERE id = ?',
-            [page.sort_order, page.id]
-          )
+          await db.execute('UPDATE pages SET sort_order = ? WHERE id = ?', [page.sort_order, page.id])
         }
       }
 

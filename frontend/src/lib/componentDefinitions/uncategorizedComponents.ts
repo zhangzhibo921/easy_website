@@ -1,5 +1,5 @@
 import { ComponentDefinition } from '@/types/templates'
-import { VideoPlayerPreview } from '@/components/PageBuilder/previews'
+import { VideoPlayerPreview, RawHtmlPreview } from '@/components/PageBuilder/previews'
 
 export const uncategorizedComponents: ComponentDefinition[] = [
   {
@@ -28,7 +28,7 @@ export const uncategorizedComponents: ComponentDefinition[] = [
       { key: 'autoPlay', label: '自动播放', type: 'text', value: false },
       { key: 'loop', label: '循环播放', type: 'text', value: false },
       { key: 'muted', label: '静音播放', type: 'text', value: true },
-      { key: 'controls', label: '显示控制条', type: 'text', value: true },
+      { key: 'controls', label: '显示控制栏', type: 'text', value: true },
       {
         key: 'widthOption',
         label: '宽度',
@@ -51,5 +51,21 @@ export const uncategorizedComponents: ComponentDefinition[] = [
       }
     ],
     previewComponent: VideoPlayerPreview
+  },
+  {
+    type: 'raw-html',
+    name: '自定义 HTML',
+    description: '插入自定义 HTML 片段，容器类名用于样式隔离',
+    icon: '🧩',
+    category: '未分类组件',
+    defaultProps: {
+      html: '<p>自定义 HTML 内容</p>',
+      className: 'raw-html-block'
+    },
+    editableFields: [
+      { key: 'html', label: 'HTML 内容', type: 'textarea', value: '' },
+      { key: 'className', label: '容器类名（前缀）', type: 'text', value: 'raw-html-block' }
+    ],
+    previewComponent: RawHtmlPreview
   }
 ]

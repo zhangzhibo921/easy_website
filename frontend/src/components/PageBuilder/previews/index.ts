@@ -24,6 +24,7 @@ import { LogoScrollPreview } from './LogoScrollPreview'
 import { LinkBlockPreview } from './LinkBlockPreview'
 import { FeatureGridLargePreview } from './FeatureGridLargePreview'
 import { VideoPlayerPreview } from './VideoPlayerPreview'
+import { RawHtmlPreview } from './RawHtmlPreview'
 
 export {
   HeroPreview,
@@ -51,7 +52,8 @@ export {
   LogoScrollPreview,
   LinkBlockPreview,
   FeatureGridLargePreview,
-  VideoPlayerPreview
+  VideoPlayerPreview,
+  RawHtmlPreview
 }
 
 export const componentPreviews = {
@@ -81,6 +83,7 @@ export const componentPreviews = {
   'banner-carousel': BannerCarouselPreview,
   'link-block': LinkBlockPreview,
   'video-player': VideoPlayerPreview,
+  'raw-html': RawHtmlPreview,
   'premium-hero': HeroPreview,
   'premium-feature-grid': FeatureGridPreview,
   'premium-stats': StatsSectionPreview,

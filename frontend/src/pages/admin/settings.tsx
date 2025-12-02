@@ -1,6 +1,6 @@
 ﻿import React, { useState, useEffect, useMemo } from 'react'
 import { motion } from 'framer-motion'
-import { useForm, useFieldArray } from 'react-hook-form'
+import { useForm, useFieldArray, Controller } from 'react-hook-form'
 import {
   Save,
   Globe,
@@ -26,6 +26,7 @@ import ChangePasswordModal from '@/components/ChangePasswordModal'
 import AssetPickerModal, { SelectedAsset } from '@/components/AssetPickerModal'
 import { ThemeAwareInput, ThemeAwareSelect, ThemeAwareTextarea } from '@/components/ThemeAwareFormControls'
 import BackgroundRenderer from '@/components/theme-backgrounds/BackgroundRenderer'
+import FontSelector from '@/components/admin/settings/FontSelector'
 import toast from 'react-hot-toast'
 import { settingsApi, authApi } from '@/utils/api'
 import { useSettings } from '@/contexts/SettingsContext'
@@ -148,6 +149,9 @@ export default function AdminSettingsPage() {
       site_logo: '',
       site_favicon: '',
       icp_number: '',
+      site_font: 'inter',
+      site_font_custom_name: '',
+      site_font_url: '',
       site_theme: 'neo-futuristic',
       theme_background: 'theme-default' as ThemeBackgroundChoice,
       quick_links: [],
@@ -174,6 +178,8 @@ export default function AdminSettingsPage() {
   const watchedFooterSocialLinks = watch('footer_social_links') || []
   const backgroundPreference = (watch('theme_background') || 'theme-default') as ThemeBackgroundChoice
   const selectedThemeId = watch('site_theme') || settings?.site_theme || 'neo-futuristic'
+  const customFontName = watch('site_font_custom_name') || ''
+  const customFontUrl = watch('site_font_url') || ''
 
   const previewTheme = useMemo(() => getThemeById(selectedThemeId), [selectedThemeId])
   const previewBackgroundEffect = resolveBackgroundEffect(previewTheme, backgroundPreference)
@@ -231,6 +237,9 @@ export default function AdminSettingsPage() {
           address: (serverSettings as any)?.address || '',
           icp_number: (serverSettings as any)?.icp_number || '',
           social_links: (serverSettings as any)?.social_links || {},
+          site_font: (serverSettings as any)?.site_font || 'inter',
+          site_font_custom_name: (serverSettings as any)?.site_font_custom_name || '',
+          site_font_url: (serverSettings as any)?.site_font_url || '',
           site_theme: (serverSettings as any)?.site_theme || 'neo-futuristic',
           quick_links: [],
           site_statement: '',
@@ -554,6 +563,25 @@ export default function AdminSettingsPage() {
                   ))}
                 </ThemeAwareSelect>
               </div>
+            </div>
+            <div className="mt-4">
+              <Controller
+                control={control}
+                name="site_font"
+                render={({ field }) => (
+                  <FontSelector
+                    value={field.value}
+                    customName={customFontName}
+                    customUrl={customFontUrl}
+                    onChange={field.onChange}
+                    onCustomChange={({ name, url }) => {
+                      setValue('site_font', 'custom', { shouldDirty: true })
+                      setValue('site_font_custom_name', name, { shouldDirty: true })
+                      setValue('site_font_url', url, { shouldDirty: true })
+                    }}
+                  />
+                )}
+              />
             </div>
             <div className="relative rounded-xl overflow-hidden border border-semantic-panelBorder bg-black/5">
               <BackgroundRenderer effect={previewBackgroundEffect} />

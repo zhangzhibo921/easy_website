@@ -554,13 +554,7 @@ export default function AdminPagesPage() {
                               <Eye className="w-4 h-4 mr-1" />
                               可视化编辑
                             </Link>
-                            <Link
-                              href={`/admin/pages/${page.id}/edit`}
-                              className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-amber-50 text-amber-600 hover:bg-amber-100 transition-colors"
-                            >
-                              <Edit className="w-4 h-4 mr-1" />
-                              普通编辑
-                            </Link>
+                            
                             <button
                               onClick={() => handleDelete(page.id)}
                               className="inline-flex items-center px-3 py-1.5 text-xs font-medium rounded-lg bg-rose-50 text-rose-600 hover:bg-rose-100 transition-colors"
@@ -744,3 +738,7 @@ export default function AdminPagesPage() {
     </AdminLayout>
   )
 }
+
+
+
+
